@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ShieldCheck, 
   QrCode, 
@@ -55,83 +55,19 @@ const INITIAL_LEDGER = [
   { hash: "0x9a1...e4", type: "GENESIS", details: "Ticket Contract Deployed", timestamp: Date.now() - 1000000 }
 ];
 
-// Simple pseudo-hash generator for demo (deterministic)
+// Simple pseudo-hash generator for demo
 const generateHash = (data) => {
   let hash = 0, i, chr;
-  if (data.length === 0) return "0x0";
+  if (data.length === 0) return hash;
   for (i = 0; i < data.length; i++) {
     chr = data.charCodeAt(i);
     hash = ((hash << 5) - hash) + chr;
-    hash |= 0;
+    hash |= 0; 
   }
-  return "0x" + Math.abs(hash).toString(16);
+  return "0x" + Math.abs(hash).toString(16) + Math.random().toString(16).substr(2, 8);
 };
 
-// Ticket ID generator (uses crypto when available)
-let TICKET_COUNTER = 1;
-const generateTicketId = () => {
-  try {
-    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-      return `TKT-${crypto.randomUUID().split('-')[0].toUpperCase()}`;
-    }
-    if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
-      const arr = new Uint32Array(1);
-      crypto.getRandomValues(arr);
-      return `TKT-${(arr[0] % 1000000).toString().padStart(6, '0')}`;
-    }
-  } catch {
-    // fallthrough to fallback
-  }
-  return `TKT-${(Date.now() % 1000000).toString(36)}-${TICKET_COUNTER++}`;
-};
 
-// Helper to create ledger blocks outside component render scope
-const createAddToLedger = (setLedger) => (type, details) => {
-  const timestamp = Date.now();
-  const hash = generateHash(JSON.stringify(details) + timestamp);
-  const newBlock = { hash, type, details, timestamp };
-  setLedger(prev => [newBlock, ...prev]);
-  return newBlock.hash;
-};
-
-// --- SUB-COMPONENTS (declared at top-level) ---
-
-function Navbar({ view, setView }) {
-  return (
-    <nav className="bg-slate-900 text-white p-4 flex justify-between items-center sticky top-0 z-50 shadow-lg border-b border-slate-700">
-      <div className="flex items-center gap-2 cursor-pointer" onClick={() => setView('marketplace')}>
-        <ShieldCheck className="text-emerald-400" size={28} />
-        <span className="font-bold text-xl tracking-tight">Satya<span className="text-emerald-400">Ticketing</span></span>
-      </div>
-      <div className="flex gap-4 text-sm font-medium">
-        <button 
-          onClick={() => setView('marketplace')}
-          className={`px-3 py-1 rounded-full ${view === 'marketplace' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'}`}
-        >
-          Events
-        </button>
-        <button 
-          onClick={() => setView('wallet')}
-          className={`px-3 py-1 rounded-full ${view === 'wallet' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'}`}
-        >
-          My Tickets
-        </button>
-        <button 
-          onClick={() => setView('dashboard')}
-          className={`px-3 py-1 rounded-full ${view === 'dashboard' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'}`}
-        >
-          Ledger
-        </button>
-        <button 
-          onClick={() => setView('scanner')}
-          className={`px-3 py-1 rounded-full flex items-center gap-1 ${view === 'scanner' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-emerald-400 border border-emerald-900'}`}
-        >
-          <QrCode size={16} /> Venue
-        </button>
-      </div>
-    </nav>
-  );
-}
 
 function Marketplace({ setSelectedEvent }) {
   return (
