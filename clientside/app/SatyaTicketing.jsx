@@ -1,4 +1,8 @@
+"use client";
+
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { createClient } from '../lib/supabase/clients';
 import { 
   ShieldCheck, 
   QrCode, 
@@ -69,6 +73,8 @@ const generateHash = (data) => {
 
 export default function SatyaTicketing() {
   // --- STATE ---
+  const router = useRouter();
+
   const [view, setView] = useState('marketplace'); // marketplace, wallet, scanner, dashboard
   const [user, setUser] = useState({ name: "Aditya Kumar", verified: false, id: "IND-9876", bioHash: null });
   const [ledger, setLedger] = useState(INITIAL_LEDGER);
@@ -77,9 +83,12 @@ export default function SatyaTicketing() {
   const [processing, setProcessing] = useState(false);
   const [scanResult, setScanResult] = useState(null); // 'valid', 'invalid', 'mismatch'
   
-  // Mock Biometric Capture State
   const [isScanningFace, setIsScanningFace] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
+
+  // Auth state
+  const [authUser, setAuthUser] = useState(null);
+  const [accountOpen, setAccountOpen] = useState(false);
 
   // --- EFFECTS for Animation/Simulation ---
 
@@ -120,6 +129,39 @@ export default function SatyaTicketing() {
     };
     setLedger(prev => [newBlock, ...prev]);
     return newBlock.hash;
+  };
+
+  // --- Auth helpers ---
+  useEffect(() => {
+    const supabase = createClient();
+    let mounted = true;
+
+    // initial session
+    supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
+      setAuthUser(data?.session?.user ?? null);
+    });
+
+    // subscribe to auth changes
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setAuthUser(session?.user ?? null);
+    });
+
+    return () => {
+      mounted = false;
+      listener?.subscription?.unsubscribe?.();
+    };
+  }, []);
+
+  const handleSignOut = async () => {
+    try {
+      const supabase = createClient();
+      await supabase.auth.signOut();
+      setAuthUser(null);
+      router.push('/login');
+    } catch (err) {
+      console.error('Sign out failed', err);
+    }
   };
 
   const handleVerifyIdentity = () => {
@@ -209,31 +251,61 @@ export default function SatyaTicketing() {
         <ShieldCheck className="text-emerald-400" size={28} />
         <span className="font-bold text-xl tracking-tight">Satya<span className="text-emerald-400">Ticketing</span></span>
       </div>
-      <div className="flex gap-4 text-sm font-medium">
-        <button 
-          onClick={() => setView('marketplace')}
-          className={`px-3 py-1 rounded-full ${view === 'marketplace' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'}`}
-        >
-          Events
-        </button>
-        <button 
-          onClick={() => setView('wallet')}
-          className={`px-3 py-1 rounded-full ${view === 'wallet' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'}`}
-        >
-          My Tickets
-        </button>
-        <button 
-          onClick={() => setView('dashboard')}
-          className={`px-3 py-1 rounded-full ${view === 'dashboard' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'}`}
-        >
-          Ledger
-        </button>
-        <button 
-          onClick={() => setView('scanner')}
-          className={`px-3 py-1 rounded-full flex items-center gap-1 ${view === 'scanner' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-emerald-400 border border-emerald-900'}`}
-        >
-          <QrCode size={16} /> Venue
-        </button>
+      <div className="flex items-center gap-4 text-sm font-medium">
+        <div className="hidden sm:flex gap-2">
+          <button 
+            onClick={() => setView('marketplace')}
+            className={`px-3 py-1 rounded-full ${view === 'marketplace' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'}`}
+          >
+            Events
+          </button>
+          <button 
+            onClick={() => setView('wallet')}
+            className={`px-3 py-1 rounded-full ${view === 'wallet' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'}`}
+          >
+            My Tickets
+          </button>
+          <button 
+            onClick={() => setView('dashboard')}
+            className={`px-3 py-1 rounded-full ${view === 'dashboard' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'}`}
+          >
+            Ledger
+          </button>
+          <button 
+            onClick={() => setView('scanner')}
+            className={`px-3 py-1 rounded-full flex items-center gap-1 ${view === 'scanner' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-emerald-400 border border-emerald-900'}`}
+          >
+            <QrCode size={16} /> Venue
+          </button>
+        </div>
+
+        {/* account area */}
+        <div className="relative">
+          {authUser ? (
+            <div className="relative">
+              <button onClick={() => setAccountOpen(!accountOpen)} className="flex items-center gap-2 bg-slate-800 px-3 py-1 rounded-full">
+                <div className="w-8 h-8 bg-emerald-400 text-slate-900 rounded-full flex items-center justify-center font-bold text-sm">
+                  {(() => {
+                    const name = authUser.user_metadata?.full_name || authUser.email || 'U';
+                    return String(name).charAt(0).toUpperCase();
+                  })()}
+                </div>
+                <div className="hidden sm:block text-sm truncate max-w-[120px]">{authUser.user_metadata?.full_name || authUser.email}</div>
+              </button>
+
+              {accountOpen && (
+                <div className="absolute right-0 mt-2 w-44 bg-slate-800 text-white rounded shadow-lg p-2 z-50">
+                  <button onClick={() => { setView('dashboard'); setAccountOpen(false); }} className="w-full text-left px-2 py-2 hover:bg-slate-700 rounded">Dashboard</button>
+                  <button onClick={handleSignOut} className="w-full text-left px-2 py-2 hover:bg-slate-700 rounded">Sign out</button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <button onClick={() => router.push('/login')} className="px-3 py-1 rounded-full bg-emerald-500 text-slate-900 font-semibold">Login</button>
+            </div>
+          )}
+        </div>
       </div>
     </nav>
   );
