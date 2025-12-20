@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '../../lib/supabase/clients';
+import { createClient } from '../lib/supabase/clients';
 import { 
   ShieldCheck, 
   QrCode, 
