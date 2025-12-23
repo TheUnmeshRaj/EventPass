@@ -1,108 +1,108 @@
-import base64
-import os
-from io import BytesIO
-
-import numpy as np
-from deepface import DeepFace
-from flask import Flask, jsonify, request
+from flask import Flask, request, jsonify
 from flask_cors import CORS
-from PIL import Image
+from deepface import DeepFace  # type: ignore
+import numpy as np
+import base64
+import cv2
+import os
+from numpy.linalg import norm
+import tempfile
 
 app = Flask(__name__)
 CORS(app)
 
-# ---- Paths ----
-BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-DATASET_FOLDER = os.path.join(BASE_DIR, "dataset")
-os.makedirs(DATASET_FOLDER, exist_ok=True)
+# ---------------- CONFIG ----------------
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATASET_DIR = os.path.join(BASE_DIR, "dataset")
+MODEL_NAME = "VGG-Face"
+SIMILARITY_THRESHOLD = 0.35  # tune this
+# ----------------------------------------
+
+def cosine_similarity(a, b):
+    return np.dot(a, b) / (norm(a) * norm(b))
 
 
-# ---- Helpers ----
-def decode_base64_image(image_base64):
-    if "," in image_base64:
-        image_base64 = image_base64.split(",")[1]
-    image_data = base64.b64decode(image_base64)
-    image = Image.open(BytesIO(image_data)).convert("RGB")
-    return np.array(image)
+print("Loading model once...")
+DeepFace.build_model(MODEL_NAME)
+print("Model loaded")
 
+print("Caching dataset embeddings...")
+dataset_embeddings = []
 
-# ---- Routes ----
-@app.route("/api/register-face", methods=["POST"])
-def register_face():
-    try:
-        data = request.get_json()
-        image_base64 = data.get("image")
-        user_id = data.get("user_id")
+for filename in os.listdir(DATASET_DIR):
+    img_path = os.path.join(DATASET_DIR, filename)
 
-        if not image_base64 or not user_id:
-            return jsonify({"success": False, "error": "Missing image or user_id"}), 400
+    emb = DeepFace.represent(
+        img_path=img_path,
+        model_name=MODEL_NAME,
+        enforce_detection=False
+    )[0]["embedding"]
 
-        image_np = decode_base64_image(image_base64)
+    dataset_embeddings.append({
+        "name": filename,
+        "embedding": np.array(emb)
+    })
 
-        user_folder = os.path.join(DATASET_FOLDER, user_id)
-        os.makedirs(user_folder, exist_ok=True)
-
-        image_path = os.path.join(user_folder, f"face_{len(os.listdir(user_folder))}.jpg")
-        Image.fromarray(image_np).save(image_path)
-
-        return jsonify({"success": True, "message": "Face registered"}), 201
-
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+print(f"Cached {len(dataset_embeddings)} embeddings")
 
 
 @app.route("/api/verify-face", methods=["POST"])
 def verify_face():
-    print("DATASET CONTENTS:", os.listdir(DATASET_FOLDER))
     try:
-        data = request.get_json()
+        data = request.json
         image_base64 = data.get("image")
-        user_id = data.get("user_id")
+        user_id = data.get("user_id")  # currently unused but ready
 
-        if not image_base64 or not user_id:
-            return jsonify({"success": False, "error": "Missing image or user_id"}), 400
+        if not image_base64:
+            return jsonify(success=False, result="invalid"), 400
 
-        user_folder = os.path.join(DATASET_FOLDER, user_id)
-        print("USER ID:", repr(user_id))
-        print("CHECK PATH:", user_folder)
-        if not os.path.exists(user_folder):
-            return jsonify({
-                "success": False,
-                "verified": False,
-                "result": "invalid",
-                "error": "User not found"
-            }), 404
+        # Strip base64 header
+        image_base64 = image_base64.split(",")[1]
+        image_bytes = base64.b64decode(image_base64)
 
-        captured_img = decode_base64_image(image_base64)
+        # Save temp image
+        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as temp:
+            temp.write(image_bytes)
+            temp_path = temp.name
 
-        result = DeepFace.verify(
-            img1_path=user_folder,     # compare against ALL images
-            img2_path=captured_img,
-            model_name="ArcFace",
-            distance_metric="cosine",
+        # Get embedding of captured face
+        captured_embedding = DeepFace.represent(
+            img_path=temp_path,
+            model_name=MODEL_NAME,
             enforce_detection=False
+        )[0]["embedding"]
+
+        captured_embedding = np.array(captured_embedding)
+
+        best_score = -1
+        best_match = None
+
+        for item in dataset_embeddings:
+            score = cosine_similarity(captured_embedding, item["embedding"])
+            if score > best_score:
+                best_score = score
+                best_match = item["name"]
+
+        os.remove(temp_path)
+
+        if best_score >= SIMILARITY_THRESHOLD:
+            return jsonify(
+                success=True,
+                result="valid",
+                match=best_match,
+                similarity=float(best_score)
+            )
+
+        return jsonify(
+            success=True,
+            result="mismatch",
+            similarity=float(best_score)
         )
 
-        return jsonify({
-            "success": True,
-            "verified": result["verified"],
-            "distance": float(result["distance"]),
-            "result": "valid" if result["verified"] else "mismatch"
-        }), 200
-
     except Exception as e:
-        return jsonify({
-            "success": False,
-            "verified": False,
-            "result": "error",
-            "error": str(e)
-        }), 500
-
-
-@app.route("/health", methods=["GET"])
-def health():
-    return jsonify({"status": "ok"}), 200
+        print("Error:", e)
+        return jsonify(success=False, result="invalid"), 500
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(debug=True)
