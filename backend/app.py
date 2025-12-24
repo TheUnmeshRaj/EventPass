@@ -1,11 +1,11 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
+from flask import Flask, request, jsonify # type: ignore
+from flask_cors import CORS # type: ignore
 from deepface import DeepFace  # type: ignore
-import numpy as np
+import numpy as np # type: ignore
 import base64
-import cv2
+import cv2 # type: ignore
 import os
-from numpy.linalg import norm
+from numpy.linalg import norm # type: ignore
 import tempfile
 
 app = Flask(__name__)

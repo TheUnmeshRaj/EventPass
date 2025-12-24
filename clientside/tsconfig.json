@@ -29,6 +29,6 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
     "**/*.mts"
-, "app/satyaticketing/SatyaTicketing.jsx"  ],
+, "app/satyaticketing/SatyaTicketing.jsx", "app/login/page.jsx"  ],
   "exclude": ["node_modules"]
 }

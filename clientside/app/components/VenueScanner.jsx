@@ -89,6 +89,7 @@ export function VenueScanner({
 
       if (result.success) {
         setScanResult(result.result);
+        console.log('Face verification result:', result.similarity)
       } else {
         setScanResult('invalid');
       }

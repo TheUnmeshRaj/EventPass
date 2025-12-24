@@ -19,35 +19,84 @@ export function UserDashboard({ authUser }) {
     id_type: 'aadhaar',
   });
 
-  useEffect(() => {
-    const fetchProfile = async () => {
-      if (!authUser?.id) return;
+useEffect(() => {
+  const fetchProfile = async () => {
+    if (!authUser?.id) return;
+    
+    try {
+      setLoading(true);
       const profile = await getUserProfile(authUser.id);
+      
       if (profile) {
-        setFormData(prev => ({ ...prev, ...profile }));
+        // Map profile data to formData structure
+        setFormData({
+          full_name: profile.full_name || '',
+          email: profile.email || authUser.email || '',
+          phone: profile.phone || '',
+          address: profile.address || '',
+          city: profile.city || '',
+          state: profile.state || '',
+          pincode: profile.pincode || '',
+          government_id: profile.government_id || '',
+          id_type: profile.id_type || 'aadhaar',
+        });
       } else {
+        // Fallback to auth user metadata only
+        setFormData({
+          full_name: authUser.user_metadata?.full_name || authUser.user_metadata?.name || '',
+          email: authUser.email || '',
+          phone: '',
+          address: '',
+          city: '',
+          state: '',
+          pincode: '',
+          government_id: '',
+          id_type: 'aadhaar',
+        });
+      }
+    } catch (error) {
+      console.error('Failed to fetch profile:', error);
+      // Set minimal data from auth user
+      setFormData({
+        full_name: authUser.user_metadata?.full_name || '',
+        email: authUser.email || '',
+        phone: '',
+        address: '',
+        city: '',
+        state: '',
+        pincode: '',
+        government_id: '',
+        id_type: 'aadhaar',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  fetchProfile();
+
+  // Real-time subscription
+  if (authUser?.id) {
+    const subscription = subscribeToUserProfile(authUser.id, (updatedProfile) => {
+      if (updatedProfile) {
         setFormData(prev => ({
           ...prev,
-          full_name: authUser.user_metadata?.full_name || '',
-          email: authUser.email || '',
+          full_name: updatedProfile.full_name || prev.full_name,
+          phone: updatedProfile.phone || prev.phone,
+          address: updatedProfile.address || prev.address,
+          city: updatedProfile.city || prev.city,
+          state: updatedProfile.state || prev.state,
+          pincode: updatedProfile.pincode || prev.pincode,
+          government_id: updatedProfile.government_id || prev.government_id,
+          id_type: updatedProfile.id_type || prev.id_type,
         }));
       }
-      setLoading(false);
-    };
+    });
 
-    fetchProfile();
+    return () => subscription.unsubscribe();
+  }
+}, [authUser?.id]); // Only depend on authUser.id
 
-    // Subscribe to real-time updates
-    if (authUser?.id) {
-      const subscription = subscribeToUserProfile(authUser.id, (updatedProfile) => {
-        setFormData(prev => ({ ...prev, ...updatedProfile }));
-      });
-
-      return () => {
-        subscription.unsubscribe();
-      };
-    }
-  }, [authUser]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -55,6 +104,9 @@ export function UserDashboard({ authUser }) {
   };
 
   const handleSave = async () => {
+    console.log('Profile data:', profile);
+  console.log('Auth user:', authUser);
+
     setSaving(true);
     setMessage(null);
     try {
@@ -236,10 +288,13 @@ export function UserDashboard({ authUser }) {
               <button
                 onClick={handleSave}
                 disabled={saving}
+                
                 className="flex-1 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-lg font-bold transition-colors disabled:opacity-50"
               >
                 <Save size={18} /> {saving ? 'Saving...' : 'Save Changes'}
+                
               </button>
+              
               <button
                 onClick={() => setIsEditing(false)}
                 className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 py-2 rounded-lg font-bold transition-colors"
@@ -247,8 +302,10 @@ export function UserDashboard({ authUser }) {
                 Cancel
               </button>
             </div>
+            
           )}
         </div>
+        
 
         {/* Info Box */}
         <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg">
@@ -257,6 +314,9 @@ export function UserDashboard({ authUser }) {
           </p>
         </div>
       </div>
+      
     </div>
+    
   );
+  
 }
