@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '../lib/supabase/clients';
+import { returnTicket, createTicket, subscribeToUserTickets, getUserTickets } from '../lib/supabase/database';
 import { XCircle } from 'lucide-react';
 import { Navbar } from './components/Navbar';
 import { EventsMarketplace } from './components/EventsMarketplace';
@@ -81,6 +82,7 @@ function SatyaTicketingApp() {
   // Auth
   const [authUser, setAuthUser] = useState(null);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     let interval;
@@ -101,8 +103,55 @@ function SatyaTicketingApp() {
     const supabase = createClient();
     let mounted = true;
 
-    supabase.auth.getSession().then(({ data }) => { if (!mounted) return; setAuthUser(data?.session?.user ?? null); });
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => { setAuthUser(session?.user ?? null); });
+    supabase.auth.getSession().then(({ data }) => { if (!mounted) return; const user = data?.session?.user ?? null; setAuthUser(user); setIsAdmin(user?.user_metadata?.role === 'admin' || user?.email?.includes('admin')); });
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => { const user = session?.user ?? null; setAuthUser(user); setIsAdmin(user?.user_metadata?.role === 'admin' || user?.email?.includes('admin')); });
+
+    return () => { mounted = false; listener?.subscription?.unsubscribe?.(); };
+  }, []);
+
+  // Load user tickets on auth
+  useEffect(() => {
+    if (!authUser?.id) return;
+
+    const loadTickets = async () => {
+      console.log('Loading tickets for user:', authUser.id);
+      const tickets = await getUserTickets(authUser.id);
+      console.log('Loaded tickets:', tickets);
+      setMyTickets(tickets || []);
+    };
+
+    loadTickets();
+
+    // Subscribe to real-time ticket updates for logged-in user
+    const subscription = subscribeToUserTickets(authUser.id, (payload) => {
+      console.log('Ticket update received:', payload);
+      if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+        const updatedTicket = payload.new;
+        setMyTickets(prev => {
+          // Match on ticket_id since that's the unique identifier we use
+          const exists = prev.find(t => t.ticket_id === updatedTicket.ticket_id);
+          if (exists && payload.eventType === 'UPDATE') {
+            return prev.map(t => t.ticket_id === updatedTicket.ticket_id ? { ...t, ...updatedTicket } : t);
+          }
+          if (!exists && payload.eventType === 'INSERT') {
+            return [...prev, updatedTicket];
+          }
+          return prev;
+        });
+      } else if (payload.eventType === 'DELETE') {
+        setMyTickets(prev => prev.filter(t => t.ticket_id !== payload.old.ticket_id));
+      }
+    });
+
+    return () => subscription?.unsubscribe?.();
+  }, [authUser?.id]);
+
+  useEffect(() => {
+    const supabase = createClient();
+    let mounted = true;
+
+    supabase.auth.getSession().then(({ data }) => { if (!mounted) return; const user = data?.session?.user ?? null; setAuthUser(user); setIsAdmin(user?.user_metadata?.role === 'admin' || user?.email?.includes('admin')); });
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => { const user = session?.user ?? null; setAuthUser(user); setIsAdmin(user?.user_metadata?.role === 'admin' || user?.email?.includes('admin')); });
 
     return () => { mounted = false; listener?.subscription?.unsubscribe?.(); };
   }, []);
@@ -118,17 +167,67 @@ function SatyaTicketingApp() {
   const buyTicket = async (event) => {
     if (!user.verified) { alert('Please verify your identity (KYC) before purchasing.'); return; }
     setProcessing(true);
-    await new Promise(r => setTimeout(r, 1500));
-    const ticketId = generateTicketId();
-    const txHash = addToLedger('MINT', { action: 'PURCHASE', eventId: event.id, buyer: user.name, buyerId: user.id, price: event.price, ticketId });
-    const newTicket = { id: ticketId, event, owner: user.name, ownerId: user.id, bioHash: user.bioHash, txHash, status: 'ACTIVE', purchaseDate: new Date().toISOString() };
-    setMyTickets(prev => [...prev, newTicket]);
-    setProcessing(false); setSelectedEvent(null); setView('wallet');
+    try {
+      const ticketId = generateTicketId();
+      console.log('Creating ticket with data:', {
+        ticket_id: ticketId,
+        event_id: event.id,
+        owner_id: authUser?.id || user.id,
+        bio_hash: user.bioHash,
+        status: 'ACTIVE',
+      });
+      
+      // Save to Supabase database first
+      const savedTicket = await createTicket({
+        ticket_id: ticketId,
+        event_id: event.id,
+        owner_id: authUser?.id || user.id,
+        bio_hash: user.bioHash,
+        status: 'ACTIVE',
+      });
+
+      console.log('Ticket saved:', savedTicket);
+      if (!savedTicket) {
+        throw new Error('No data returned from ticket creation');
+      }
+
+      // Fetch all user tickets to get complete data with events
+      const allTickets = await getUserTickets(authUser?.id || user.id);
+      console.log('All user tickets after purchase:', allTickets);
+      setMyTickets(allTickets || []);
+
+      // Record on ledger
+      const txHash = addToLedger('MINT', { action: 'PURCHASE', eventId: event.id, buyer: user.name, buyerId: user.id, price: event.price, ticketId });
+      
+      setSelectedEvent(null);
+      setView('wallet');
+      alert('Ticket purchased successfully!');
+    } catch (err) {
+      console.error('Purchase failed:', err.message || err);
+      alert(`Failed to purchase ticket: ${err.message || 'Unknown error'}`);
+    } finally {
+      setProcessing(false);
+    }
   };
 
   const resellTicket = async (ticket) => {
-    if (!window.confirm(`Confirm resale of ${ticket.id}? This will be sold at face value (₹${ticket.event.price}) back to the pool.`)) return;
-    setProcessing(true); await new Promise(r => setTimeout(r, 1500)); addToLedger('BURN', { action: 'RESALE_RETURN', ticketId: ticket.id, prevOwner: user.name, reason: 'User Initiated Return' }); setMyTickets(prev => prev.filter(t => t.id !== ticket.id)); setProcessing(false); alert('Ticket returned to pool. Refund processed to source.');
+    if (!window.confirm(`Confirm resale of ${ticket.ticket_id}? This will be sold at face value (₹${ticket.events?.price}) back to the pool.`)) return;
+    setProcessing(true);
+    try {
+      // Update ticket status in DB using the UUID id field
+      const updated = await returnTicket(ticket.id);
+      if (!updated) throw new Error('Failed to mark ticket as returned in DB');
+
+      // Record locally on ledger and remove from UI
+      addToLedger('BURN', { action: 'RESALE_RETURN', ticketId: ticket.ticket_id, prevOwner: user.name, reason: 'User Initiated Return' });
+      setMyTickets(prev => prev.filter(t => t.ticket_id !== ticket.ticket_id));
+      alert('Ticket returned to pool. Refund processed to source.');
+    } catch (err) {
+      console.error('Resale failed', err);
+      alert('Resale failed. Please try again.');
+    } finally {
+      setProcessing(false);
+    }
   };
 
   const simulateScan = (ticket) => { setProcessing(true); setTimeout(() => { setProcessing(false); if (ticket.status !== 'ACTIVE') setScanResult('invalid'); else if (ticket.bioHash === user.bioHash) setScanResult('valid'); else setScanResult('mismatch'); }, 1500); };
@@ -136,20 +235,43 @@ function SatyaTicketingApp() {
   const handleSignOut = async () => { try { const supabase = createClient(); await supabase.auth.signOut(); setAuthUser(null); router.push('/login'); } catch (err) { console.error('Sign out failed', err); } };
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
-      <Navbar view={view} setView={setView} authUser={authUser} setAccountOpen={setAccountOpen} accountOpen={accountOpen} handleSignOut={handleSignOut} />
-      {view === 'marketplace' && <EventsMarketplace setSelectedEvent={setSelectedEvent} />}
-      {view === 'wallet' && <MyTickets myTickets={myTickets} resellTicket={resellTicket} setView={setView} />}
-      {view === 'dashboard' && <Ledger ledger={ledger} />}
-      {view === 'scanner' && <VenueScanner processing={processing} scanResult={scanResult} myTickets={myTickets} simulateScan={simulateScan} setProcessing={setProcessing} setScanResult={setScanResult} />}
-      {view === 'user-profile' && <UserDashboard authUser={authUser} />}
-      {view === 'admin-events' && <AdminDashboard />}
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-900 flex flex-col">
+      <Navbar view={view} setView={setView} authUser={authUser} setAccountOpen={setAccountOpen} accountOpen={accountOpen} handleSignOut={handleSignOut} isAdmin={isAdmin} />
+      <div className="flex-grow">
+        {view === 'marketplace' && <EventsMarketplace setSelectedEvent={setSelectedEvent} />}
+        {view === 'wallet' && <MyTickets myTickets={myTickets} resellTicket={resellTicket} setView={setView} userId={authUser?.id} />}
+        {view === 'dashboard' && <Ledger ledger={ledger} />}
+        {view === 'scanner' && <VenueScanner processing={processing} scanResult={scanResult} myTickets={myTickets} simulateScan={simulateScan} setProcessing={setProcessing} setScanResult={setScanResult} />}
+        {view === 'user-profile' && <UserDashboard authUser={authUser} />}
+        {view === 'admin-events' && isAdmin && <AdminDashboard />}
+        {view === 'admin-events' && !isAdmin && <div className="p-8 text-center text-red-600"><p>Access denied. Admin privileges required.</p></div>}
+      </div>
 
       {selectedEvent && !user.verified && <IdentityVerification isScanningFace={isScanningFace} user={user} scanProgress={scanProgress} handleVerifyIdentity={handleVerifyIdentity} selectedEvent={selectedEvent} buyTicket={buyTicket} processing={processing} />}
 
       {selectedEvent && user.verified && view !== 'scanner' && (
         <div className="fixed bottom-6 right-6 z-40"><div className="bg-slate-900 text-white p-4 rounded-xl shadow-2xl max-w-sm border border-slate-700"><div className="flex justify-between items-start mb-2"><h4 className="font-bold text-emerald-400">Confirm Purchase</h4><button onClick={() => setSelectedEvent(null)} className="text-slate-500 hover:text-white"><XCircle size={16}/></button></div><p className="text-sm text-slate-300 mb-3">Buying <strong>{selectedEvent.title}</strong> for ₹{selectedEvent.price}. This ticket will be permanently linked to ID <strong>{user.id}</strong>.</p><button onClick={() => buyTicket(selectedEvent)} disabled={processing} className="w-full bg-emerald-600 hover:bg-emerald-700 py-2 rounded-lg font-bold text-sm transition-colors">{processing ? "Minting on Chain..." : "Confirm & Pay"}</button></div></div>
       )}
+
+      {/* Footer */}
+      <footer className="relative w-full border-t border-white/10 bg-gradient-to-r from-slate-950 via-slate-950/95 to-slate-950 backdrop-blur-sm">
+        <div className="w-full px-8 py-4">
+          <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+            {/* Left side - Links */}
+            <div className="flex flex-wrap gap-8 text-sm text-slate-400/90">
+              <a href="https://rvce.edu.in/department/ai_ml/main_department/" className="transition hover:text-emerald-300/80 font-medium">
+                Department of Artificial Intelligence and Machine Learning
+              </a>
+            </div>
+
+            {/* Right side - Names */}
+            <div className="flex gap-12 text-sm text-slate-300">
+              <a href="https://github.com/theunmeshraj"><p className="font-semibold">Unmesh Raj</p></a>
+              <p className="font-semibold">Aditya K</p>
+            </div>
+          </div>
+        </div>
+      </footer>
 
       <style dangerouslySetInnerHTML={{__html: `@keyframes scan { 0% { top: 0%; opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { top: 100%; opacity: 0; } } .animate-scan { animation: scan 2s linear infinite; }`}} />
     </div>

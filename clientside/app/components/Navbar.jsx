@@ -3,7 +3,7 @@ import { useRouter } from 'next/navigation';
 import { ShieldCheck, QrCode } from 'lucide-react';
 import { createClient } from "../../lib/supabase/clients";
 
-export function Navbar({ view, setView, authUser, setAccountOpen, accountOpen, handleSignOut }) {
+export function Navbar({ view, setView, authUser, setAccountOpen, accountOpen, handleSignOut, isAdmin }) {
   const router = useRouter();
 
   return (
@@ -31,7 +31,7 @@ export function Navbar({ view, setView, authUser, setAccountOpen, accountOpen, h
               {accountOpen && (
                 <div className="absolute right-0 mt-2 w-48 bg-slate-800 text-white rounded shadow-lg p-2 z-50">
                   <button onClick={() => { setView('user-profile'); setAccountOpen(false); }} className="w-full text-left px-2 py-2 hover:bg-slate-700 rounded text-sm">My Profile</button>
-                  <button onClick={() => { setView('admin-events'); setAccountOpen(false); }} className="w-full text-left px-2 py-2 hover:bg-slate-700 rounded text-sm">Manage Events</button>
+                  {isAdmin && <button onClick={() => { setView('admin-events'); setAccountOpen(false); }} className="w-full text-left px-2 py-2 hover:bg-slate-700 rounded text-sm">Manage Events</button>}
                   <button onClick={() => { setView('dashboard'); setAccountOpen(false); }} className="w-full text-left px-2 py-2 hover:bg-slate-700 rounded text-sm">Ledger</button>
                   <hr className="my-2 border-slate-700" />
                   <button onClick={handleSignOut} className="w-full text-left px-2 py-2 hover:bg-slate-700 rounded text-sm">Sign out</button>

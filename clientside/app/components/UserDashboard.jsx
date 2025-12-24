@@ -95,7 +95,7 @@ useEffect(() => {
 
     return () => subscription.unsubscribe();
   }
-}, [authUser?.id]); // Only depend on authUser.id
+}, [authUser?.id]); 
 
 
   const handleInputChange = (e) => {
@@ -104,7 +104,6 @@ useEffect(() => {
   };
 
   const handleSave = async () => {
-    console.log('Profile data:', profile);
   console.log('Auth user:', authUser);
 
     setSaving(true);
@@ -185,6 +184,7 @@ useEffect(() => {
                   name="email"
                   value={formData.email}
                   disabled
+                  placeholder="example@example.com"
                   className="w-full px-4 py-2 rounded-lg border border-slate-200 bg-slate-50 text-slate-500"
                 />
               </div>

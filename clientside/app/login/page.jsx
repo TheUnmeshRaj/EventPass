@@ -112,7 +112,7 @@ export default function LoginPage() {
       </header>
 
       {/* Center layout */}
-      <main className="relative z-10 flex min-h-[calc(100vh-5rem)] items-center justify-center px-4 pb-10 pt-6 overflow-hidden">
+      <main className="relative z-10 flex min-h-[calc(100vh-8rem)] items-center justify-center px-4 pb-3 pt-3 overflow-hidden">
         
         <div className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-10 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] lg:gap-14">
           
@@ -324,6 +324,35 @@ export default function LoginPage() {
           
         </div>
       </main>
+
+      {/* Footer */}
+      <footer className="relative z-10 w-full border-t border-white/10 bg-gradient-to-r from-slate-950 via-slate-950/95 to-slate-950 backdrop-blur-sm">
+        <div className="w-full px-8 py-4">
+          <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+            {/* Left side - Links */}
+            <div className="flex flex-wrap gap-8 text-sm text-slate-400/90">
+              <a href="#" className="transition hover:text-emerald-300/80 font-medium">
+                Privacy Policy
+              </a>
+              <a href="#" className="transition hover:text-emerald-300/80 font-medium">
+                Terms of Service
+              </a>
+              <a href="#" className="transition hover:text-emerald-300/80 font-medium">
+                Developer Docs
+              </a>
+              <a href="#" className="transition hover:text-emerald-300/80 font-medium">
+                Support
+              </a>
+            </div>
+
+            {/* Right side - Names */}
+            <div className="flex gap-12 text-sm text-slate-300">
+              <p className="font-semibold">Unmesh Raj</p>
+              <p className="font-semibold">Aditya K</p>
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

@@ -15,7 +15,6 @@ export function EventsMarketplace({ setSelectedEvent }) {
     };
     fetchEvents();
 
-    // Subscribe to real-time events
     const subscription = subscribeToEvents((payload) => {
       if (payload.eventType === 'INSERT') {
         setEvents(prev => [...prev, payload.new]);

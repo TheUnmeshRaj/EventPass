@@ -33,6 +33,7 @@ export const subscribeToEvents = (callback: (data: Record<string, unknown>) => v
 
 export const subscribeToUserTickets = (userId: string, callback: (data: Record<string, unknown>) => void) => {
   const supabase = createClient();
+  console.log('Subscribing to tickets for user:', userId)
   const subscription = supabase
     .channel(`tickets:${userId}`)
     .on('postgres_changes',
@@ -209,11 +210,19 @@ export const createTicket = async (ticketData: Record<string, unknown>) => {
   const supabase = createClient();
   const { data, error } = await supabase
     .from('tickets')
-    .insert([ticketData])
-    .select()
+    .insert([
+      {
+        ...ticketData,
+        created_at: new Date().toISOString(),
+      },
+    ])
+    .select('*, events(*)')
     .single();
 
-  if (error) console.error('Error creating ticket:', error);
+  if (error) {
+    console.error('Error creating ticket:', error);
+    throw new Error(error.message || 'Failed to create ticket');
+  }
   return data;
 };
 
