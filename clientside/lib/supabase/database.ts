@@ -1,5 +1,7 @@
 import { createClient } from './clients';
 
+
+
 // --- REALTIME SUBSCRIPTIONS ---
 export const subscribeToUserProfile = (userId: string, callback: (data: Record<string, unknown>) => void) => {
   const supabase = createClient();
@@ -226,6 +228,8 @@ export const createTicket = async (ticketData: Record<string, unknown>) => {
   return data;
 };
 
+
+
 export const returnTicket = async (ticketId: string) => {
   const supabase = createClient();
   const { data, error } = await supabase
@@ -269,3 +273,66 @@ export const getLedgerHistory = async (limit: number = 50) => {
   if (error) console.error('Error fetching ledger:', error);
   return data || [];
 };
+
+export const getUserBalance = async (userId: string) => {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('user_profiles')
+    .select('balance')
+    .eq('id', userId)
+    .single();
+
+  if (error) {
+    console.error('Error fetching user balance:', error);
+    throw error;
+  }
+
+  return data.balance;
+};
+
+export const updateUserBalance = async (
+  userId: string,
+  delta: number, // +credit or -debit
+  reason: string
+) => {
+  const supabase = createClient();
+
+  // Fetch current balance
+  const { data: user, error: fetchErr } = await supabase
+    .from('user_profiles')
+    .select('balance')
+    .eq('id', userId)
+    .single();
+
+  if (fetchErr) throw fetchErr;
+
+  const newBalance = Number(user.balance || 0) + delta;
+
+  if (newBalance < 0) {
+    throw new Error('Insufficient balance');
+  }
+
+  // Update balance
+  const { data, error } = await supabase
+    .from('user_profiles')
+    .update({
+      balance: newBalance,
+      updated_at: new Date(),
+    })
+    .eq('id', userId)
+    .select()
+    .single();
+
+  if (error) throw error;
+
+  // Ledger entry (financial)
+  await addLedgerEntry('BALANCE_UPDATE', {
+    userId,
+    delta,
+    newBalance,
+    reason,
+  });
+
+  return data;
+};
+

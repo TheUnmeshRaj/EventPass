@@ -112,6 +112,8 @@
 ```sql
 - id (UUID)
 - type (MINT/BURN/GENESIS)
+
+- New: ONCHAIN_MINT and ONCHAIN_BURN ledger entries when tickets are minted/burned on the blockchain (requires local Hardhat API server).
 - details (JSON object)
 - created_at
 ```

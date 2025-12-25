@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '../lib/supabase/clients';
-import { returnTicket, createTicket, subscribeToUserTickets, getUserTickets } from '../lib/supabase/database';
+import { returnTicket, createTicket, subscribeToUserTickets, getUserTickets, addLedgerEntry } from '../lib/supabase/database';
 import { XCircle } from 'lucide-react';
 import { Navbar } from './components/Navbar';
 import { EventsMarketplace } from './components/EventsMarketplace';
@@ -13,6 +13,10 @@ import { VenueScanner } from './components/VenueScanner';
 import { IdentityVerification } from './components/IdentityVerification';
 import { UserDashboard } from './components/UserDashboard';
 import { AdminDashboard } from './components/AdminDashboard';
+import { Balance } from './components/Balance';
+import { getUserBalance, updateUserBalance } from '../lib/supabase/database';
+
+
 
 // --- MOCK DATA & UTILS ---
 
@@ -69,6 +73,8 @@ function SatyaTicketingApp() {
   const router = useRouter();
 
   const [view, setView] = useState('marketplace');
+  const [balance, setBalance] = useState(0);
+
   const [user, setUser] = useState({ name: 'Aditya Kumar', verified: false, id: 'IND-9876', bioHash: null });
   const [ledger, setLedger] = useState(INITIAL_LEDGER);
   const [myTickets, setMyTickets] = useState([]);
@@ -156,6 +162,22 @@ function SatyaTicketingApp() {
     return () => { mounted = false; listener?.subscription?.unsubscribe?.(); };
   }, []);
 
+  useEffect(() => {
+  if (!authUser?.id) return;
+
+  const loadBalance = async () => {
+    try {
+      const bal = await getUserBalance(authUser.id);
+      setBalance(Number(bal || 0));
+    } catch (err) {
+      console.error('Failed to load balance', err);
+    }
+  };
+
+  loadBalance();
+}, [authUser?.id]);
+
+
   const addToLedger = (type, details) => {
     const newBlock = { hash: generateHash(JSON.stringify(details) + Date.now()), type, details, timestamp: Date.now() };
     setLedger(prev => [newBlock, ...prev]);
@@ -167,6 +189,12 @@ function SatyaTicketingApp() {
   const buyTicket = async (event) => {
     if (!user.verified) { alert('Please verify your identity (KYC) before purchasing.'); return; }
     setProcessing(true);
+    if (balance < event.price) {
+  alert('Insufficient balance. Please add money.');
+  setProcessing(false);
+  return;
+}
+
     try {
       const ticketId = generateTicketId();
       console.log('Creating ticket with data:', {
@@ -187,8 +215,40 @@ function SatyaTicketingApp() {
       });
 
       console.log('Ticket saved:', savedTicket);
+await updateUserBalance(
+  authUser.id,
+  -event.price,
+  `TICKET_PURCHASE:${event.id}`
+);
+
+setBalance(prev => prev - event.price);
+
+
       if (!savedTicket) {
         throw new Error('No data returned from ticket creation');
+      }
+
+      // Attempt to mint on-chain via local blockchain API
+      try {
+        const apiBase = process.env.NEXT_PUBLIC_BLOCKCHAIN_API || 'http://localhost:3001';
+        const resp = await fetch(`${apiBase}/mint`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ticketId, recipient: null })
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+          console.error('On-chain mint failed:', data);
+          throw new Error(data.error || 'On-chain mint failed');
+        }
+
+        // persist on-chain TX to ledger table
+        await addLedgerEntry('ONCHAIN_MINT', { ticketId, txHash: data.txHash, eventId: event.id, buyerId: user.id });
+        // also add to local UI ledger for immediate feedback
+        addToLedger('MINT', { action: 'PURCHASE', eventId: event.id, buyer: user.name, buyerId: user.id, price: event.price, ticketId, txHash: data.txHash });
+      } catch (onchainErr) {
+        console.warn('Warning: on-chain mint failed, but ticket exists in DB. Error:', onchainErr.message || onchainErr);
+        addToLedger('MINT', { action: 'PURCHASE', eventId: event.id, buyer: user.name, buyerId: user.id, price: event.price, ticketId, txHash: null });
       }
 
       // Fetch all user tickets to get complete data with events
@@ -196,9 +256,6 @@ function SatyaTicketingApp() {
       console.log('All user tickets after purchase:', allTickets);
       setMyTickets(allTickets || []);
 
-      // Record on ledger
-      const txHash = addToLedger('MINT', { action: 'PURCHASE', eventId: event.id, buyer: user.name, buyerId: user.id, price: event.price, ticketId });
-      
       setSelectedEvent(null);
       setView('wallet');
       alert('Ticket purchased successfully!');
@@ -214,12 +271,32 @@ function SatyaTicketingApp() {
     if (!window.confirm(`Confirm resale of ${ticket.ticket_id}? This will be sold at face value (₹${ticket.events?.price}) back to the pool.`)) return;
     setProcessing(true);
     try {
+      // First, attempt to burn on-chain
+      try {
+        const apiBase = process.env.NEXT_PUBLIC_BLOCKCHAIN_API || 'http://localhost:3001';
+        const resp = await fetch(`${apiBase}/burn`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ticketId: ticket.ticket_id })
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+          console.error('On-chain burn failed:', data);
+          throw new Error(data.error || 'On-chain burn failed');
+        }
+        // Persist on-chain burn tx to ledger DB
+        await addLedgerEntry('ONCHAIN_BURN', { ticketId: ticket.ticket_id, txHash: data.txHash, prevOwner: user.id });
+        addToLedger('BURN', { action: 'RESALE_RETURN', ticketId: ticket.ticket_id, prevOwner: user.name, txHash: data.txHash, reason: 'User Initiated Return' });
+      } catch (onchainErr) {
+        console.warn('On-chain burn failed, aborting resale:', onchainErr);
+        throw new Error('On-chain burn failed. Resale aborted.');
+      }
+
       // Update ticket status in DB using the UUID id field
       const updated = await returnTicket(ticket.id);
       if (!updated) throw new Error('Failed to mark ticket as returned in DB');
 
-      // Record locally on ledger and remove from UI
-      addToLedger('BURN', { action: 'RESALE_RETURN', ticketId: ticket.ticket_id, prevOwner: user.name, reason: 'User Initiated Return' });
+      // Remove from UI
       setMyTickets(prev => prev.filter(t => t.ticket_id !== ticket.ticket_id));
       alert('Ticket returned to pool. Refund processed to source.');
     } catch (err) {
@@ -244,6 +321,14 @@ function SatyaTicketingApp() {
         {view === 'scanner' && <VenueScanner processing={processing} scanResult={scanResult} myTickets={myTickets} simulateScan={simulateScan} setProcessing={setProcessing} setScanResult={setScanResult} />}
         {view === 'user-profile' && <UserDashboard authUser={authUser} />}
         {view === 'admin-events' && isAdmin && <AdminDashboard />}
+{view === 'balance' && (
+  <Balance
+    balance={balance}
+    setBalance={setBalance}
+    userId={authUser?.id}
+  />
+)}
+
         {view === 'admin-events' && !isAdmin && <div className="p-8 text-center text-red-600"><p>Access denied. Admin privileges required.</p></div>}
       </div>
 

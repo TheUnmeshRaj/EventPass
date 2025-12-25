@@ -207,6 +207,17 @@ You've successfully set up EventPass if:
 After setup, consider adding:
 
 - [ ] **Payment Integration** - Stripe/Razorpay for ticket purchases
+
+
+## Blockchain (Hardhat) - Local flow
+
+1. Install dependencies in /blockchain: `cd blockchain && npm install`
+2. Start a local Hardhat node: `npm run node` (from /blockchain)
+3. Deploy the contract: `npm run deploy` (from /blockchain). This will write `deployments.json`.
+4. Start the blockchain API server which exposes `/mint` and `/burn`: `npm run start-server` (from /blockchain)
+5. Set `NEXT_PUBLIC_BLOCKCHAIN_API=http://localhost:3001` in your `.env.local` for the client.
+
+Notes: The server uses a PRIVATE_KEY from `blockchain/.env` to sign transactions and will mint/burn on behalf of the platform. This initial integration mints and burns when tickets are purchased and resold on the platform.
 - [ ] **Email Notifications** - Confirmation emails for bookings
 - [ ] **QR Code Generation** - Unique QR codes for each ticket
 - [ ] **Advanced Search** - Filter by date range, price range
