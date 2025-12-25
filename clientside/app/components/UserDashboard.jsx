@@ -95,7 +95,7 @@ useEffect(() => {
 
     return () => subscription.unsubscribe();
   }
-}, [authUser?.id]); 
+}, [authUser.email, authUser.id, authUser.user_metadata?.full_name, authUser.user_metadata?.name]); 
 
 
   const handleInputChange = (e) => {
@@ -134,7 +134,7 @@ useEffect(() => {
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <div className="flex items-center gap-4">
-            <div className="w-16 h-16 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center">
+            <div className="w-16 h-16 bg-linear-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center">
               <User size={32} className="text-white" />
             </div>
             <div>

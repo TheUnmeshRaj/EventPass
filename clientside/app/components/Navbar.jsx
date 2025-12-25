@@ -66,7 +66,7 @@ export function Navbar({ view, setView, authUser, setAccountOpen, accountOpen, h
             <div className="relative">
               <button onClick={() => setAccountOpen(!accountOpen)} className="flex items-center gap-2 bg-slate-800 px-3 py-1 rounded-full">
                 <div className="w-8 h-8 bg-emerald-400 text-slate-900 rounded-full flex items-center justify-center font-bold text-sm">{(() => { const name = authUser.user_metadata?.full_name || authUser.email || 'U'; return String(name).charAt(0).toUpperCase(); })()}</div>
-                <div className="hidden sm:block text-sm truncate max-w-[120px]">{authUser.user_metadata?.full_name || authUser.email}</div>
+                <div className="hidden sm:block text-sm truncate max-w-30">{authUser.user_metadata?.full_name || authUser.email}</div>
               </button>
 
               {accountOpen && (
