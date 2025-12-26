@@ -1,14 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getUserAvatarUrl } from '../../lib/supabase/database';
 
-import {
-  Calendar,
-  Ticket,
-  Wallet,
-  BarChart3,
-  QrCode,
-  ShieldCheck
-} from "lucide-react";
+import {Calendar, Ticket, Wallet, BarChart3, QrCode, ShieldCheck} from "lucide-react";
 
 import { useRouter } from 'next/navigation';
 import { motion } from "framer-motion";
@@ -108,7 +101,9 @@ export function Navbar({ view, setView, authUser, setAccountOpen, accountOpen, h
                 {(() => {
                   
                   const image = <img src={preview || "/luffy.png"} alt="User Avatar"
-                    onError={(e) => {e.currentTarget.src = "/luffy.png";}}/>
+                    onError={(e) => {e.currentTarget.src = "/luffy.png";}}
+                    className="rounded-full object-cover w-8 h-8"
+                  />
 
                   return image ? (image) : "U";
                 })()}
