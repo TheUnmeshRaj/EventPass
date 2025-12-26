@@ -89,6 +89,42 @@ export const updateUserProfile = async (userId: string, profileData: Record<stri
   return data;
 };
 
+export const uploadUserAvatar = async (userId: string, file: File) => {
+  const supabase = createClient();
+
+  const fileExt = file.name.split('.').pop();
+  const fileName = `${userId}.${fileExt}`;
+
+  const { error } = await supabase.storage
+    .from('avatars')
+    .upload(fileName, file, {
+      upsert: true,
+      contentType: file.type,
+      cacheControl: '3600',
+    });
+
+  if (error) {
+    console.error('Avatar upload error:', error);
+    throw error;
+  }
+
+  return fileName;
+};
+
+export const getUserAvatarUrl = (userId: string) => {
+  const supabase = createClient();
+  const timestamp = Date.now();
+  
+  const { data } = supabase.storage
+  .from('avatars')
+  .getPublicUrl(`${userId}.png`);
+
+  console.log("Try kiya at timestamdp:", timestamp, ") from usl:", data.publicUrl);
+  return data.publicUrl;
+};
+
+
+
 export const createUserProfile = async (userId: string, fullName: string, email: string) => {
   const supabase = createClient();
   const { data, error } = await supabase

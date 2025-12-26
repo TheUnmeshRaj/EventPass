@@ -56,16 +56,13 @@ def verify_face():
         if not image_base64:
             return jsonify(success=False, result="invalid"), 400
 
-        # Strip base64 header
         image_base64 = image_base64.split(",")[1]
         image_bytes = base64.b64decode(image_base64)
 
-        # Save temp image
         with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as temp:
             temp.write(image_bytes)
             temp_path = temp.name
 
-        # Get embedding of captured face
         captured_embedding = DeepFace.represent(
             img_path=temp_path,
             model_name=MODEL_NAME,

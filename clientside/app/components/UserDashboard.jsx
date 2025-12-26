@@ -1,12 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { User, Mail, Phone, MapPin, Save, Edit2, CheckCircle } from 'lucide-react';
-import { updateUserProfile, getUserProfile, subscribeToUserProfile } from '../../lib/supabase/database';
+import { User, Mail, Phone, MapPin, Save, Edit2, CheckCircle, Camera, AlertCircle } from 'lucide-react';
+import {
+  updateUserProfile,
+  getUserProfile,
+  subscribeToUserProfile,
+  uploadUserAvatar,
+  getUserAvatarUrl
+} from '../../lib/supabase/database';
+
+const DEFAULT_AVATAR = "/luffy.png";
+
 
 export function UserDashboard({ authUser }) {
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
+  const [imageFile, setImageFile] = useState(null);
+  const [preview, setPreview] = useState(null);
+
   const [formData, setFormData] = useState({
     full_name: '',
     email: '',
@@ -19,31 +31,50 @@ export function UserDashboard({ authUser }) {
     id_type: 'aadhaar',
   });
 
-useEffect(() => {
-  const fetchProfile = async () => {
-    if (!authUser?.id) return;
-    
-    try {
-      setLoading(true);
-      const profile = await getUserProfile(authUser.id);
-      
-      if (profile) {
-        // Map profile data to formData structure
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (!authUser?.id) return;
+
+      try {
+        setLoading(true);
+        const profile = await getUserProfile(authUser.id);
+
+        // Set avatar preview
+        const avatarUrl = getUserAvatarUrl(authUser.id);
+        setPreview(avatarUrl || null);
+
+        if (profile) {
+          // Map profile data to formData structure
+          setFormData({
+            full_name: profile.full_name || '',
+            email: profile.email || authUser.email || '',
+            phone: profile.phone || '',
+            address: profile.address || '',
+            city: profile.city || '',
+            state: profile.state || '',
+            pincode: profile.pincode || '',
+            government_id: profile.government_id || '',
+            id_type: profile.id_type || 'aadhaar',
+          });
+        } else {
+          // Fallback to auth user metadata only
+          setFormData({
+            full_name: authUser.user_metadata?.full_name || authUser.user_metadata?.name || '',
+            email: authUser.email || '',
+            phone: '',
+            address: '',
+            city: '',
+            state: '',
+            pincode: '',
+            government_id: '',
+            id_type: 'aadhaar',
+          });
+        }
+      } catch (error) {
+        console.error('Failed to fetch profile:', error);
+        // Set minimal data from auth user
         setFormData({
-          full_name: profile.full_name || '',
-          email: profile.email || authUser.email || '',
-          phone: profile.phone || '',
-          address: profile.address || '',
-          city: profile.city || '',
-          state: profile.state || '',
-          pincode: profile.pincode || '',
-          government_id: profile.government_id || '',
-          id_type: profile.id_type || 'aadhaar',
-        });
-      } else {
-        // Fallback to auth user metadata only
-        setFormData({
-          full_name: authUser.user_metadata?.full_name || authUser.user_metadata?.name || '',
+          full_name: authUser.user_metadata?.full_name || '',
           email: authUser.email || '',
           phone: '',
           address: '',
@@ -53,67 +84,81 @@ useEffect(() => {
           government_id: '',
           id_type: 'aadhaar',
         });
+      } finally {
+        setLoading(false);
       }
-    } catch (error) {
-      console.error('Failed to fetch profile:', error);
-      // Set minimal data from auth user
-      setFormData({
-        full_name: authUser.user_metadata?.full_name || '',
-        email: authUser.email || '',
-        phone: '',
-        address: '',
-        city: '',
-        state: '',
-        pincode: '',
-        government_id: '',
-        id_type: 'aadhaar',
+    };
+
+    fetchProfile();
+    // Real-time subscription
+    if (authUser?.id) {
+      const subscription = subscribeToUserProfile(authUser.id, (updatedProfile) => {
+        if (updatedProfile) {
+          setFormData(prev => ({
+            ...prev,
+            full_name: updatedProfile.full_name || prev.full_name,
+            phone: updatedProfile.phone || prev.phone,
+            address: updatedProfile.address || prev.address,
+            city: updatedProfile.city || prev.city,
+            state: updatedProfile.state || prev.state,
+            pincode: updatedProfile.pincode || prev.pincode,
+            government_id: updatedProfile.government_id || prev.government_id,
+            id_type: updatedProfile.id_type || prev.id_type,
+          }));
+        }
       });
-    } finally {
-      setLoading(false);
+
+      return () => subscription.unsubscribe();
     }
-  };
-
-  fetchProfile();
-
-  // Real-time subscription
-  if (authUser?.id) {
-    const subscription = subscribeToUserProfile(authUser.id, (updatedProfile) => {
-      if (updatedProfile) {
-        setFormData(prev => ({
-          ...prev,
-          full_name: updatedProfile.full_name || prev.full_name,
-          phone: updatedProfile.phone || prev.phone,
-          address: updatedProfile.address || prev.address,
-          city: updatedProfile.city || prev.city,
-          state: updatedProfile.state || prev.state,
-          pincode: updatedProfile.pincode || prev.pincode,
-          government_id: updatedProfile.government_id || prev.government_id,
-          id_type: updatedProfile.id_type || prev.id_type,
-        }));
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }
-}, [authUser.email, authUser.id, authUser.user_metadata?.full_name, authUser.user_metadata?.name]); 
-
+  }, [authUser?.email, authUser?.id, authUser?.user_metadata?.full_name, authUser?.user_metadata?.name]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleImageChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImageFile(file);
+    setPreview(URL.createObjectURL(file));
   };
 
   const handleSave = async () => {
-  console.log('Auth user:', authUser);
-
+    console.log('Auth user:', authUser);
     setSaving(true);
     setMessage(null);
+
     try {
+      // Upload avatar first if changed
+      if (imageFile && authUser?.id) {
+        try {
+          await uploadUserAvatar(authUser.id, imageFile);
+          // Update preview with cache-busting
+          setPreview(getUserAvatarUrl(authUser.id));
+          setImageFile(null); // Clear the file after successful upload
+        } catch (uploadError) {
+          console.error('Avatar upload failed:', uploadError);
+          setMessage({
+            type: 'error',
+            text: 'Profile updated but avatar upload failed. Please try uploading the image again.'
+          });
+          // Continue with profile update even if avatar fails
+        }
+      }
+
+      // Update profile
       await updateUserProfile(authUser.id, formData);
+
       setMessage({ type: 'success', text: 'Profile updated successfully!' });
       setIsEditing(false);
       setTimeout(() => setMessage(null), 3000);
     } catch (error) {
+      console.error('Save error:', error);
       setMessage({ type: 'error', text: 'Failed to update profile. Try again.' });
     } finally {
       setSaving(false);
@@ -122,92 +167,154 @@ useEffect(() => {
 
   if (loading) {
     return (
-      <div className="p-6 max-w-4xl mx-auto">
-        <div className="text-center py-8">Loading profile...</div>
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-emerald-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-slate-200 text-lg">Loading profile...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-8">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-900 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-4xl mx-auto">
         {/* Header */}
-        <div className="flex justify-between items-center mb-8">
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 bg-linear-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center">
-              <User size={32} className="text-white" />
+        <div className="bg-white/6 backdrop-blur-lg border border-white/8 rounded-2xl shadow-xl p-8 mb-6">
+          <div className="flex flex-col sm:flex-row items-center gap-6">
+            {/* Avatar Section */}
+            <div className="relative group">
+              <img
+                src={preview || "/luffy.png"}
+                alt="Avatar"
+                onError={(e) => {
+                  e.currentTarget.src = "/luffy.png";
+                }}
+                className="w-24 h-24 rounded-full object-cover border-4 border-emerald-400/30"
+              />
+
+
+              {isEditing && (
+                <label className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                  <Camera className="w-6 h-6 text-white" />
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageChange}
+                    className="hidden"
+                  />
+                </label>
+              )}
             </div>
-            <div>
-              <h2 className="text-2xl font-bold text-slate-800">My Profile</h2>
-              <p className="text-slate-500">{formData.email}</p>
+
+            {/* User Info */}
+            <div className="flex-1 text-center sm:text-left">
+              <h1 className="text-3xl font-bold text-white mb-1">
+                {formData.full_name || 'User Profile'}
+              </h1>
+              <p className="text-slate-300 flex items-center justify-center sm:justify-start gap-2">
+                <Mail className="w-4 h-4" />
+                {formData.email}
+              </p>
             </div>
+
+            {/* Edit Button */}
+            {!isEditing && (
+              <button
+                onClick={() => setIsEditing(true)}
+                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl font-semibold transition-all shadow-lg hover:shadow-emerald-500/25 active:scale-95"
+              >
+                <Edit2 className="w-4 h-4" />
+                Edit Profile
+              </button>
+            )}
           </div>
-          {!isEditing && (
-            <button
-              onClick={() => setIsEditing(true)}
-              className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-            >
-              <Edit2 size={18} /> Edit Profile
-            </button>
-          )}
         </div>
 
         {/* Messages */}
         {message && (
-          <div className={`mb-6 p-4 rounded-lg flex items-center gap-2 ${message.type === 'success' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
-            <CheckCircle size={20} />
-            {message.text}
+          <div className={`mb-6 p-4 rounded-xl border backdrop-blur-sm ${message.type === 'success'
+              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+              : 'bg-rose-500/10 border-rose-500/30 text-rose-300'
+            }`}>
+            <div className="flex items-center gap-3">
+              {message.type === 'success' ? (
+                <CheckCircle className="w-5 h-5" />
+              ) : (
+                <AlertCircle className="w-5 h-5" />
+              )}
+              <span className="font-medium">{message.text}</span>
+            </div>
           </div>
         )}
 
         {/* Form */}
-        <div className="space-y-6">
+        <div className="bg-white/6 backdrop-blur-lg border border-white/8 rounded-2xl shadow-xl p-8">
           {/* Personal Info */}
-          <div>
-            <h3 className="text-lg font-bold text-slate-800 mb-4">Personal Information</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="mb-8">
+            <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+              <User className="w-5 h-5 text-emerald-400" />
+              Personal Information
+            </h2>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Full Name */}
               <div>
-                <label className="block text-sm font-bold text-slate-700 mb-2">Full Name</label>
+                <label className="block text-sm font-medium text-slate-200 mb-2">
+                  Full Name
+                </label>
                 <input
                   type="text"
                   name="full_name"
                   value={formData.full_name}
                   onChange={handleInputChange}
                   disabled={!isEditing}
-                  className={`w-full px-4 py-2 rounded-lg border ${isEditing ? 'border-slate-300 bg-white' : 'border-slate-200 bg-slate-50'}`}
+                  className="w-full bg-white/6 border border-white/10 text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  placeholder="Enter your full name"
                 />
               </div>
+
+              {/* Email */}
               <div>
-                <label className="block text-sm font-bold text-slate-700 mb-2 flex items-center gap-2"><Mail size={16} /> Email</label>
+                <label className="block text-sm font-medium text-slate-200 mb-2">
+                  Email
+                </label>
                 <input
                   type="email"
                   name="email"
                   value={formData.email}
                   disabled
-                  placeholder="example@example.com"
-                  className="w-full px-4 py-2 rounded-lg border border-slate-200 bg-slate-50 text-slate-500"
+                  className="w-full bg-white/6 border border-white/10 text-slate-300 rounded-lg px-4 py-3 opacity-50 cursor-not-allowed"
                 />
               </div>
+
+              {/* Phone */}
               <div>
-                <label className="block text-sm font-bold text-slate-700 mb-2 flex items-center gap-2"><Phone size={16} /> Phone</label>
+                <label className="block text-sm font-medium text-slate-200 mb-2">
+                  Phone
+                </label>
                 <input
                   type="tel"
                   name="phone"
                   value={formData.phone}
                   onChange={handleInputChange}
                   disabled={!isEditing}
-                  placeholder="+91 XXXXX XXXXX"
-                  className={`w-full px-4 py-2 rounded-lg border ${isEditing ? 'border-slate-300 bg-white' : 'border-slate-200 bg-slate-50'}`}
+                  className="w-full bg-white/6 border border-white/10 text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  placeholder="+91 1234567890"
                 />
               </div>
+
+              {/* ID Type */}
               <div>
-                <label className="block text-sm font-bold text-slate-700 mb-2">ID Type</label>
+                <label className="block text-sm font-medium text-slate-200 mb-2">
+                  ID Type
+                </label>
                 <select
                   name="id_type"
                   value={formData.id_type}
                   onChange={handleInputChange}
                   disabled={!isEditing}
-                  className={`w-full px-4 py-2 rounded-lg border ${isEditing ? 'border-slate-300 bg-white' : 'border-slate-200 bg-slate-50'}`}
+                  className="w-full bg-white/6 border border-white/10 text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                 >
                   <option value="aadhaar">Aadhaar</option>
                   <option value="pan">PAN</option>
@@ -215,68 +322,94 @@ useEffect(() => {
                   <option value="driving_license">Driving License</option>
                 </select>
               </div>
+
+              {/* Government ID */}
               <div className="md:col-span-2">
-                <label className="block text-sm font-bold text-slate-700 mb-2">Government ID Number</label>
+                <label className="block text-sm font-medium text-slate-200 mb-2">
+                  Government ID Number
+                </label>
                 <input
                   type="text"
                   name="government_id"
                   value={formData.government_id}
                   onChange={handleInputChange}
                   disabled={!isEditing}
-                  placeholder="Enter your government ID number"
-                  className={`w-full px-4 py-2 rounded-lg border ${isEditing ? 'border-slate-300 bg-white' : 'border-slate-200 bg-slate-50'}`}
+                  className="w-full bg-white/6 border border-white/10 text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  placeholder="Enter your government ID"
                 />
               </div>
             </div>
           </div>
 
           {/* Address Info */}
-          <div>
-            <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2"><MapPin size={20} /> Address</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="mb-8">
+            <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+              <MapPin className="w-5 h-5 text-emerald-400" />
+              Address
+            </h2>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Address */}
               <div className="md:col-span-2">
-                <label className="block text-sm font-bold text-slate-700 mb-2">Address</label>
+                <label className="block text-sm font-medium text-slate-200 mb-2">
+                  Address
+                </label>
                 <input
                   type="text"
                   name="address"
                   value={formData.address}
                   onChange={handleInputChange}
                   disabled={!isEditing}
+                  className="w-full bg-white/6 border border-white/10 text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                   placeholder="Street address"
-                  className={`w-full px-4 py-2 rounded-lg border ${isEditing ? 'border-slate-300 bg-white' : 'border-slate-200 bg-slate-50'}`}
                 />
               </div>
+
+              {/* City */}
               <div>
-                <label className="block text-sm font-bold text-slate-700 mb-2">City</label>
+                <label className="block text-sm font-medium text-slate-200 mb-2">
+                  City
+                </label>
                 <input
                   type="text"
                   name="city"
                   value={formData.city}
                   onChange={handleInputChange}
                   disabled={!isEditing}
-                  className={`w-full px-4 py-2 rounded-lg border ${isEditing ? 'border-slate-300 bg-white' : 'border-slate-200 bg-slate-50'}`}
+                  className="w-full bg-white/6 border border-white/10 text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  placeholder="City"
                 />
               </div>
+
+              {/* State */}
               <div>
-                <label className="block text-sm font-bold text-slate-700 mb-2">State</label>
+                <label className="block text-sm font-medium text-slate-200 mb-2">
+                  State
+                </label>
                 <input
                   type="text"
                   name="state"
                   value={formData.state}
                   onChange={handleInputChange}
                   disabled={!isEditing}
-                  className={`w-full px-4 py-2 rounded-lg border ${isEditing ? 'border-slate-300 bg-white' : 'border-slate-200 bg-slate-50'}`}
+                  className="w-full bg-white/6 border border-white/10 text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  placeholder="State"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-bold text-slate-700 mb-2">Pincode</label>
+
+              {/* Pincode */}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-slate-200 mb-2">
+                  Pincode
+                </label>
                 <input
                   type="text"
                   name="pincode"
                   value={formData.pincode}
                   onChange={handleInputChange}
                   disabled={!isEditing}
-                  className={`w-full px-4 py-2 rounded-lg border ${isEditing ? 'border-slate-300 bg-white' : 'border-slate-200 bg-slate-50'}`}
+                  className="w-full bg-white/6 border border-white/10 text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  placeholder="Pincode"
                 />
               </div>
             </div>
@@ -284,39 +417,28 @@ useEffect(() => {
 
           {/* Action Buttons */}
           {isEditing && (
-            <div className="flex gap-3 pt-6 border-t border-slate-200">
+            <div className="flex flex-col sm:flex-row gap-4">
               <button
                 onClick={handleSave}
                 disabled={saving}
-                
-                className="flex-1 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-lg font-bold transition-colors disabled:opacity-50"
+                className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-bold transition-all shadow-lg hover:shadow-emerald-500/25 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 flex items-center justify-center gap-2"
               >
-                <Save size={18} /> {saving ? 'Saving...' : 'Save Changes'}
-                
+                <Save className="w-5 h-5" />
+                {saving ? 'Saving...' : 'Save Changes'}
               </button>
-              
+
               <button
                 onClick={() => setIsEditing(false)}
-                className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 py-2 rounded-lg font-bold transition-colors"
+                disabled={saving}
+                className="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-3 rounded-xl font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
               >
                 Cancel
               </button>
             </div>
-            
           )}
         </div>
-        
 
-        {/* Info Box */}
-        <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-          <p className="text-sm text-blue-800">
-            <strong>ℹ️ Security Note:</strong> Your personal information is encrypted and stored securely. We only use it for ticket verification and event management purposes.
-          </p>
-        </div>
       </div>
-      
     </div>
-    
   );
-  
 }
