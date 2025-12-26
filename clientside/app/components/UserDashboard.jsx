@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, Mail, Phone, MapPin, Save, Edit2, CheckCircle, Camera, AlertCircle } from 'lucide-react';
+import { User, Mail, MapPin, Save, Edit2, CheckCircle, Camera, AlertCircle } from 'lucide-react';
 import {
   updateUserProfile,
   getUserProfile,
@@ -8,7 +8,6 @@ import {
   getUserAvatarUrl
 } from '../../lib/supabase/database';
 
-const DEFAULT_AVATAR = "/luffy.png";
 
 
 export function UserDashboard({ authUser }) {
@@ -167,7 +166,7 @@ export function UserDashboard({ authUser }) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-900 flex items-center justify-center">
+      <div className="min-h-screen bg-linear-to-br from-slate-900 via-slate-800 to-emerald-900 flex items-center justify-center">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-emerald-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-slate-200 text-lg">Loading profile...</p>
@@ -177,7 +176,7 @@ export function UserDashboard({ authUser }) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-900 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-linear-to-br from-slate-900 via-slate-800 to-emerald-900 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="bg-white/6 backdrop-blur-lg border border-white/8 rounded-2xl shadow-xl p-8 mb-6">

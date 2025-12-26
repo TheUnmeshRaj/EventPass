@@ -314,7 +314,7 @@ setBalance(prev => prev - event.price);
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 flex flex-col">
       <Navbar view={view} setView={setView} authUser={authUser} setAccountOpen={setAccountOpen} accountOpen={accountOpen} handleSignOut={handleSignOut} isAdmin={isAdmin} />
-      <div className="flex-grow">
+      <div className="grow">
         {view === 'marketplace' && <EventsMarketplace setSelectedEvent={setSelectedEvent} />}
         {view === 'wallet' && <MyTickets myTickets={myTickets} resellTicket={resellTicket} setView={setView} userId={authUser?.id} />}
         {view === 'dashboard' && <Ledger ledger={ledger} />}
@@ -339,7 +339,7 @@ setBalance(prev => prev - event.price);
       )}
 
       {/* Footer */}
-      <footer className="relative w-full border-t border-white/10 bg-gradient-to-r from-slate-950 via-slate-950/95 to-slate-950 backdrop-blur-sm">
+      <footer className="relative w-full border-t border-white/10 bg-linear-to-r from-slate-950 via-slate-950/95 to-slate-950 backdrop-blur-sm">
         <div className="w-full px-8 py-4">
           <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
             {/* Left side - Links */}

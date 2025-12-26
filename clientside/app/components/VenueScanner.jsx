@@ -105,7 +105,7 @@ export function VenueScanner({
     <div className="flex flex-col h-[calc(100vh-70px)] bg-black">
       <div className="flex-1 flex items-center justify-center gap-8 p-6 bg-black">
         {/* Camera on Left */}
-        <div className="relative w-full max-w-2xl h-96 bg-black rounded-3xl overflow-hidden border-2 border-slate-800 shadow-xl flex-shrink-0">
+        <div className="relative w-full max-w-2xl h-96 bg-black rounded-3xl overflow-hidden border-2 border-slate-800 shadow-xl shrink-0">
           <video
             ref={videoRef}
             autoPlay
