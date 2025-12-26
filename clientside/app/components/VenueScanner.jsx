@@ -1,12 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import {
-  Lock,
-  CheckCircle,
-  UserCheck,
-  XCircle,
-  Camera,
-  CameraOff,
-} from 'lucide-react';
+import {Lock,CheckCircle,UserCheck,XCircle,Camera,CameraOff} from 'lucide-react';
 
 export function VenueScanner({
   processing,
@@ -60,6 +53,8 @@ export function VenueScanner({
   const captureFrame = async () => {
     if (!videoRef.current || !canvasRef.current || !cameraActive) return;
     if (myTickets.length === 0) return;
+    await fetch("/api/profile", { method: "POST" });
+
 
     setProcessing(true);
 
