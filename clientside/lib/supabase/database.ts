@@ -264,6 +264,29 @@ export const createTicket = async (ticketData: Record<string, unknown>) => {
   return data;
 };
 
+export const resellTicket = async (
+  ticketId: string,
+  userId: string,
+  refundAmount: number
+) => {
+  // 1. Mark ticket as returned
+  const ticket = await returnTicket(ticketId);
+  if (!ticket) throw new Error('Ticket return failed');
+
+  // 2. Refund user
+  await updateUserBalance(userId, refundAmount, 'Ticket resale refund');
+
+  // 3. Ledger entry
+  await addLedgerEntry('TICKET_RESALE', {
+    ticketId,
+    userId,
+    refundAmount,
+  });
+
+  return ticket;
+};
+
+
 
 
 export const returnTicket = async (ticketId: string) => {

@@ -75,7 +75,7 @@ function SatyaTicketingApp() {
   const [view, setView] = useState('marketplace');
   const [balance, setBalance] = useState(0);
 
-  const [user, setUser] = useState({ name: 'Aditya Kumar', verified: false, id: 'IND-9876', bioHash: null });
+  const [user, setUser] = useState({ name: 'Aditya Kumar', verified: false, id: 'b99f148f-72f8-4fbd-9272-7f8a73c40f39', bioHash: null });
   const [ledger, setLedger] = useState(INITIAL_LEDGER);
   const [myTickets, setMyTickets] = useState([]);
   const [selectedEvent, setSelectedEvent] = useState(null);
@@ -267,45 +267,83 @@ setBalance(prev => prev - event.price);
     }
   };
 
-  const resellTicket = async (ticket) => {
-    if (!window.confirm(`Confirm resale of ${ticket.ticket_id}? This will be sold at face value (₹${ticket.events?.price}) back to the pool.`)) return;
-    setProcessing(true);
-    try {
-      // First, attempt to burn on-chain
-      try {
-        const apiBase = process.env.NEXT_PUBLIC_BLOCKCHAIN_API || 'http://localhost:3001';
-        const resp = await fetch(`${apiBase}/burn`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ticketId: ticket.ticket_id })
-        });
-        const data = await resp.json();
-        if (!resp.ok) {
-          console.error('On-chain burn failed:', data);
-          throw new Error(data.error || 'On-chain burn failed');
-        }
-        // Persist on-chain burn tx to ledger DB
-        await addLedgerEntry('ONCHAIN_BURN', { ticketId: ticket.ticket_id, txHash: data.txHash, prevOwner: user.id });
-        addToLedger('BURN', { action: 'RESALE_RETURN', ticketId: ticket.ticket_id, prevOwner: user.name, txHash: data.txHash, reason: 'User Initiated Return' });
-      } catch (onchainErr) {
-        console.warn('On-chain burn failed, aborting resale:', onchainErr);
-        throw new Error('On-chain burn failed. Resale aborted.');
-      }
+const resellTicket = async (ticket) => {
+  // --- Basic safety checks ---
+  if (!ticket || !ticket.id || !ticket.ticket_id) {
+    alert('Invalid ticket data');
+    return;
+  }
 
-      // Update ticket status in DB using the UUID id field
-      const updated = await returnTicket(ticket.id);
-      if (!updated) throw new Error('Failed to mark ticket as returned in DB');
+  if (ticket.owner_id !== user.id) {
+    alert('Unauthorized ticket resale attempt');
+    return;
+  }
 
-      // Remove from UI
-      setMyTickets(prev => prev.filter(t => t.ticket_id !== ticket.ticket_id));
-      alert('Ticket returned to pool. Refund processed to source.');
-    } catch (err) {
-      console.error('Resale failed', err);
-      alert('Resale failed. Please try again.');
-    } finally {
-      setProcessing(false);
+  const price = ticket.events?.price;
+  if (price == null) {
+    alert('Ticket price missing. Cannot resell.');
+    return;
+  }
+
+  // --- User confirmation ---
+  const confirmed = window.confirm(
+    `Confirm resale of ${ticket.ticket_id}?\nThis will be sold at face value (₹${price}) back to the pool.`
+  );
+
+  if (!confirmed) return;
+
+  setProcessing(true);
+
+  try {
+    // ===============================
+    // 1️⃣ BLOCKCHAIN BURN (OPTIONAL)
+    // ===============================
+    let txHash = null;
+
+
+
+    // ===============================
+    // 2️⃣ UPDATE TICKET STATUS (DB)
+    // ===============================
+    const updatedTicket = await returnTicket(ticket.id);
+
+    if (!updatedTicket) {
+      throw new Error('Failed to mark ticket as returned in DB');
     }
-  };
+
+    // ===============================
+    // 3️⃣ REFUND USER (WALLET / BALANCE)
+    // ===============================
+    await updateUserBalance(
+      user.id,
+      price,
+      'Ticket resale refund'
+    );
+
+    // ===============================
+    // 4️⃣ LEDGER ENTRY (BUSINESS)
+    // ===============================
+    await addLedgerEntry('TICKET_RESALE', {
+      ticketId: ticket.ticket_id,
+      userId: user.id,
+      amount: price,
+      txHash,
+      reason: 'User initiated resale',
+    });
+
+    // ===============================
+    // 5️⃣ UPDATE UI STATE
+    // ===============================
+    setMyTickets((prev) => prev.filter((t) => t.id !== ticket.id));
+
+    alert('Ticket returned to pool. Refund processed successfully.');
+  } catch (err) {
+    console.error('Resale failed:', err);
+    alert(err.message || 'Resale failed. Please try again.');
+  } finally {
+    setProcessing(false);
+  }
+};
 
   const simulateScan = (ticket) => { setProcessing(true); setTimeout(() => { setProcessing(false); if (ticket.status !== 'ACTIVE') setScanResult('invalid'); else if (ticket.bioHash === user.bioHash) setScanResult('valid'); else setScanResult('mismatch'); }, 1500); };
 
