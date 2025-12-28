@@ -104,6 +104,15 @@ export function UserDashboard({ authUser }) {
     setImageFile(file);
     setPreview(URL.createObjectURL(file));
   };
+  const fileToBase64 = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+};
+
 
   const handleSave = async () => {
     console.log('Auth user:', authUser);
@@ -127,6 +136,36 @@ export function UserDashboard({ authUser }) {
           // Continue with profile update even if avatar fails
         }
       }
+if (imageFile && authUser?.id) {
+  try {
+    // Convert image to base64 (RAM only)
+    const imageBase64 = await fileToBase64(imageFile);
+
+    // Send to DeepFace backend
+    const res = await fetch("http://localhost:5001/enroll", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        userId: authUser.id,
+        image: imageBase64,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || "Face enrollment failed");
+    }
+
+    alert("Face enrolled successfully ✅");
+  } catch (err) {
+    console.error(err);
+    alert("Face enrollment failed ❌");
+  }
+}
+
 
       // Update profile
       await updateUserProfile(authUser.id, formData);
