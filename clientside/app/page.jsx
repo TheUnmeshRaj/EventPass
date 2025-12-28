@@ -3,7 +3,22 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '../lib/supabase/clients';
-import { returnTicket, createTicket, subscribeToUserTickets, getUserTickets, addLedgerEntry } from '../lib/supabase/database';
+
+import {
+  returnTicket,
+  createTicket,
+  subscribeToUserTickets,
+  getUserTickets,
+  addLedgerEntry,
+  getUserBalance,
+  updateUserBalance,
+  updateUserProfile,
+  getUserProfile,
+  subscribeToUserProfile,
+  uploadUserAvatar,
+  getUserAvatarUrl
+} from '../lib/supabase/database';
+
 import { XCircle } from 'lucide-react';
 import { Navbar } from './components/Navbar';
 import { EventsMarketplace } from './components/EventsMarketplace';
@@ -14,14 +29,18 @@ import { IdentityVerification } from './components/IdentityVerification';
 import { UserDashboard } from './components/UserDashboard';
 import { AdminDashboard } from './components/AdminDashboard';
 import { Balance } from './components/Balance';
-import { getUserBalance, updateUserBalance } from '../lib/supabase/database';
 
+// Constants
+const INITIAL_LEDGER = [
+  {
+    hash: "0x9a1...e4",
+    type: "GENESIS",
+    details: "Ticket Contract Deployed",
+    timestamp: Date.now() - 1000000
+  }
+];
 
-
-// --- MOCK DATA & UTILS ---
-
-const INITIAL_LEDGER = [ { hash: "0x9a1...e4", type: "GENESIS", details: "Ticket Contract Deployed", timestamp: Date.now() - 1000000 } ];
-
+// Utility functions
 const generateHash = (data) => {
   let hash = 0, i, chr;
   if (!data) return "0x0";
@@ -35,87 +54,142 @@ const generateHash = (data) => {
 
 const generateTicketId = () => `TKT-${Math.floor(Math.random() * 100000)}`;
 
-// --- Page wrapper (auth check) ---
+// Main Page Component with Auth Check
 export default function SatyaTicketingPage() {
   const router = useRouter();
   const [checking, setChecking] = useState(true);
+  const [authUser, setAuthUser] = useState(null);
 
   useEffect(() => {
     let mounted = true;
     const supabase = createClient();
 
-    (async () => {
+    const checkAuth = async () => {
       try {
-        const { data } = await supabase.auth.getSession();
-        if (!data?.session) {
+        const { data, error } = await supabase.auth.getUser();
+        
+        if (error || !data?.user) {
           router.push('/login');
           return;
         }
+        
+        if (mounted) {
+          setAuthUser(data.user);
+        }
       } catch (err) {
-        console.error(err);
+        console.error('Auth check failed:', err);
         router.push('/login');
-        return;
       } finally {
-        if (mounted) setChecking(false);
+        if (mounted) {
+          setChecking(false);
+        }
       }
-    })();
+    };
 
-    return () => { mounted = false; };
+    checkAuth();
+
+    return () => {
+      mounted = false;
+    };
   }, [router]);
 
-  if (checking) return <div className="p-8">Checking authentication...</div>;
+  if (checking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto mb-4"></div>
+          <p className="text-slate-600">Checking authentication...</p>
+        </div>
+      </div>
+    );
+  }
 
-  return <SatyaTicketingApp />;
+  if (!authUser) {
+    return null;
+  }
+
+  return <SatyaTicketingApp authUser={authUser} />;
 }
 
-// --- Main app component (merged) ---
-function SatyaTicketingApp() {
+// Main App Component
+function SatyaTicketingApp({ authUser }) {
   const router = useRouter();
 
+  // View and UI state
   const [view, setView] = useState('marketplace');
-  const [balance, setBalance] = useState(0);
-
-  const [user, setUser] = useState({ name: 'Aditya Kumar', verified: false, id: 'b99f148f-72f8-4fbd-9272-7f8a73c40f39', bioHash: null });
-  const [ledger, setLedger] = useState(INITIAL_LEDGER);
-  const [myTickets, setMyTickets] = useState([]);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [processing, setProcessing] = useState(false);
   const [scanResult, setScanResult] = useState(null);
+  const [accountOpen, setAccountOpen] = useState(false);
 
+  // User state
+  const [user, setUser] = useState({
+    name: authUser?.user_metadata?.name || authUser?.email || 'User',
+    verified: false,
+    id: authUser.id,
+    bioHash: null
+  });
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // KYC/Verification state
   const [isScanningFace, setIsScanningFace] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
 
-  // Auth
-  const [authUser, setAuthUser] = useState(null);
-  const [accountOpen, setAccountOpen] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
+  // Data state
+  const [balance, setBalance] = useState(0);
+  const [myTickets, setMyTickets] = useState([]);
+  const [ledger, setLedger] = useState(INITIAL_LEDGER);
 
+  // Face scan progress animation
   useEffect(() => {
     let interval;
     if (isScanningFace) {
-      interval = setInterval(() => setScanProgress(prev => prev >= 100 ? 100 : prev + 5), 100);
+      interval = setInterval(() => {
+        setScanProgress(prev => (prev >= 100 ? 100 : prev + 5));
+      }, 100);
     }
     return () => clearInterval(interval);
   }, [isScanningFace]);
 
+  // Complete face scan verification
   useEffect(() => {
     if (isScanningFace && scanProgress >= 100) {
-      const timer = setTimeout(() => { const bioHash = generateHash('FACE_DATA_' + user.id); setUser(prev => ({ ...prev, verified: true, bioHash })); setIsScanningFace(false); setScanProgress(0); }, 500);
+      const timer = setTimeout(() => {
+        const bioHash = generateHash('FACE_DATA_' + authUser.id);
+        setUser(prev => ({ ...prev, verified: true, bioHash }));
+        setIsScanningFace(false);
+        setScanProgress(0);
+      }, 500);
       return () => clearTimeout(timer);
     }
-  }, [scanProgress, isScanningFace, user.id]);
+  }, [scanProgress, isScanningFace, authUser.id]);
 
+  // Check admin status
   useEffect(() => {
-    const supabase = createClient();
-    let mounted = true;
+    if (!authUser) return;
+    
+    const checkAdmin = authUser?.user_metadata?.role === 'admin' || 
+                       authUser?.email?.includes('admin');
+    setIsAdmin(checkAdmin);
+  }, [authUser]);
 
-    supabase.auth.getSession().then(({ data }) => { if (!mounted) return; const user = data?.session?.user ?? null; setAuthUser(user); setIsAdmin(user?.user_metadata?.role === 'admin' || user?.email?.includes('admin')); });
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => { const user = session?.user ?? null; setAuthUser(user); setIsAdmin(user?.user_metadata?.role === 'admin' || user?.email?.includes('admin')); });
+  // Load user balance
+  useEffect(() => {
+    if (!authUser?.id) return;
 
-    return () => { mounted = false; listener?.subscription?.unsubscribe?.(); };
-  }, []);
+    const loadBalance = async () => {
+      try {
+        const bal = await getUserBalance(authUser.id);
+        setBalance(Number(bal || 0));
+      } catch (err) {
+        console.error('Failed to load balance:', err);
+      }
+    };
 
-  // Load user tickets on auth
+    loadBalance();
+  }, [authUser?.id]);
+
+  // Load user tickets and subscribe to updates
   useEffect(() => {
     if (!authUser?.id) return;
 
@@ -128,22 +202,21 @@ function SatyaTicketingApp() {
 
     loadTickets();
 
-    // Subscribe to real-time ticket updates for logged-in user
+    // Subscribe to real-time ticket updates
     const subscription = subscribeToUserTickets(authUser.id, (payload) => {
       console.log('Ticket update received:', payload);
-      if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-        const updatedTicket = payload.new;
+      
+      if (payload.eventType === 'INSERT') {
+        const newTicket = payload.new;
         setMyTickets(prev => {
-          // Match on ticket_id since that's the unique identifier we use
-          const exists = prev.find(t => t.ticket_id === updatedTicket.ticket_id);
-          if (exists && payload.eventType === 'UPDATE') {
-            return prev.map(t => t.ticket_id === updatedTicket.ticket_id ? { ...t, ...updatedTicket } : t);
-          }
-          if (!exists && payload.eventType === 'INSERT') {
-            return [...prev, updatedTicket];
-          }
-          return prev;
+          const exists = prev.find(t => t.ticket_id === newTicket.ticket_id);
+          return exists ? prev : [...prev, newTicket];
         });
+      } else if (payload.eventType === 'UPDATE') {
+        const updatedTicket = payload.new;
+        setMyTickets(prev => 
+          prev.map(t => t.ticket_id === updatedTicket.ticket_id ? { ...t, ...updatedTicket } : t)
+        );
       } else if (payload.eventType === 'DELETE') {
         setMyTickets(prev => prev.filter(t => t.ticket_id !== payload.old.ticket_id));
       }
@@ -152,83 +225,73 @@ function SatyaTicketingApp() {
     return () => subscription?.unsubscribe?.();
   }, [authUser?.id]);
 
-  useEffect(() => {
-    const supabase = createClient();
-    let mounted = true;
-
-    supabase.auth.getSession().then(({ data }) => { if (!mounted) return; const user = data?.session?.user ?? null; setAuthUser(user); setIsAdmin(user?.user_metadata?.role === 'admin' || user?.email?.includes('admin')); });
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => { const user = session?.user ?? null; setAuthUser(user); setIsAdmin(user?.user_metadata?.role === 'admin' || user?.email?.includes('admin')); });
-
-    return () => { mounted = false; listener?.subscription?.unsubscribe?.(); };
-  }, []);
-
-  useEffect(() => {
-  if (!authUser?.id) return;
-
-  const loadBalance = async () => {
-    try {
-      const bal = await getUserBalance(authUser.id);
-      setBalance(Number(bal || 0));
-    } catch (err) {
-      console.error('Failed to load balance', err);
-    }
-  };
-
-  loadBalance();
-}, [authUser?.id]);
-
-
+  // Ledger functions
   const addToLedger = (type, details) => {
-    const newBlock = { hash: generateHash(JSON.stringify(details) + Date.now()), type, details, timestamp: Date.now() };
+    const newBlock = {
+      hash: generateHash(JSON.stringify(details) + Date.now()),
+      type,
+      details,
+      timestamp: Date.now()
+    };
     setLedger(prev => [newBlock, ...prev]);
     return newBlock.hash;
   };
 
-  const handleVerifyIdentity = () => { setScanProgress(0); setIsScanningFace(true); };
+  // Identity verification handler
+  const handleVerifyIdentity = () => {
+    setScanProgress(0);
+    setIsScanningFace(true);
+  };
 
+  // Buy ticket handler
   const buyTicket = async (event) => {
-    if (!user.verified) { alert('Please verify your identity (KYC) before purchasing.'); return; }
-    setProcessing(true);
+    if (!user.verified) {
+      alert('Please verify your identity (KYC) before purchasing.');
+      return;
+    }
+
     if (balance < event.price) {
-  alert('Insufficient balance. Please add money.');
-  setProcessing(false);
-  return;
-}
+      alert('Insufficient balance. Please add money.');
+      return;
+    }
+
+    setProcessing(true);
 
     try {
       const ticketId = generateTicketId();
       console.log('Creating ticket with data:', {
         ticket_id: ticketId,
         event_id: event.id,
-        owner_id: authUser?.id || user.id,
+        owner_id: authUser.id,
         bio_hash: user.bioHash,
         status: 'ACTIVE',
       });
-      
-      // Save to Supabase database first
+
+      // Save to Supabase database
       const savedTicket = await createTicket({
         ticket_id: ticketId,
         event_id: event.id,
-        owner_id: authUser?.id || user.id,
+        owner_id: authUser.id,
         bio_hash: user.bioHash,
         status: 'ACTIVE',
       });
 
       console.log('Ticket saved:', savedTicket);
-await updateUserBalance(
-  authUser.id,
-  -event.price,
-  `TICKET_PURCHASE:${event.id}`
-);
-
-setBalance(prev => prev - event.price);
-
 
       if (!savedTicket) {
         throw new Error('No data returned from ticket creation');
       }
 
-      // Attempt to mint on-chain via local blockchain API
+      // Update user balance
+      await updateUserBalance(
+        authUser.id,
+        -event.price,
+        `TICKET_PURCHASE:${event.id}`
+      );
+
+      setBalance(prev => prev - event.price);
+
+      // Attempt blockchain mint (optional)
       try {
         const apiBase = process.env.NEXT_PUBLIC_BLOCKCHAIN_API || 'http://localhost:3001';
         const resp = await fetch(`${apiBase}/mint`, {
@@ -236,23 +299,47 @@ setBalance(prev => prev - event.price);
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ticketId, recipient: null })
         });
-        const data = await resp.json();
+
         if (!resp.ok) {
-          console.error('On-chain mint failed:', data);
-          throw new Error(data.error || 'On-chain mint failed');
+          const errorData = await resp.json();
+          console.error('On-chain mint failed:', errorData);
+          throw new Error(errorData.error || 'On-chain mint failed');
         }
 
-        // persist on-chain TX to ledger table
-        await addLedgerEntry('ONCHAIN_MINT', { ticketId, txHash: data.txHash, eventId: event.id, buyerId: user.id });
-        // also add to local UI ledger for immediate feedback
-        addToLedger('MINT', { action: 'PURCHASE', eventId: event.id, buyer: user.name, buyerId: user.id, price: event.price, ticketId, txHash: data.txHash });
+        const data = await resp.json();
+
+        // Persist on-chain TX to ledger
+        await addLedgerEntry('ONCHAIN_MINT', {
+          ticketId,
+          txHash: data.txHash,
+          eventId: event.id,
+          buyerId: authUser.id
+        });
+
+        addToLedger('MINT', {
+          action: 'PURCHASE',
+          eventId: event.id,
+          buyer: user.name,
+          buyerId: authUser.id,
+          price: event.price,
+          ticketId,
+          txHash: data.txHash
+        });
       } catch (onchainErr) {
-        console.warn('Warning: on-chain mint failed, but ticket exists in DB. Error:', onchainErr.message || onchainErr);
-        addToLedger('MINT', { action: 'PURCHASE', eventId: event.id, buyer: user.name, buyerId: user.id, price: event.price, ticketId, txHash: null });
+        console.warn('Warning: on-chain mint failed, but ticket exists in DB. Error:', onchainErr.message);
+        addToLedger('MINT', {
+          action: 'PURCHASE',
+          eventId: event.id,
+          buyer: user.name,
+          buyerId: authUser.id,
+          price: event.price,
+          ticketId,
+          txHash: null
+        });
       }
 
-      // Fetch all user tickets to get complete data with events
-      const allTickets = await getUserTickets(authUser?.id || user.id);
+      // Fetch all user tickets with complete data
+      const allTickets = await getUserTickets(authUser.id);
       console.log('All user tickets after purchase:', allTickets);
       setMyTickets(allTickets || []);
 
@@ -260,144 +347,257 @@ setBalance(prev => prev - event.price);
       setView('wallet');
       alert('Ticket purchased successfully!');
     } catch (err) {
-      console.error('Purchase failed:', err.message || err);
+      console.error('Purchase failed:', err);
       alert(`Failed to purchase ticket: ${err.message || 'Unknown error'}`);
     } finally {
       setProcessing(false);
     }
   };
 
-const resellTicket = async (ticket) => {
-  // --- Basic safety checks ---
-  if (!ticket || !ticket.id || !ticket.ticket_id) {
-    alert('Invalid ticket data');
-    return;
-  }
-
-  if (ticket.owner_id !== user.id) {
-    alert('Unauthorized ticket resale attempt');
-    return;
-  }
-
-  const price = ticket.events?.price;
-  if (price == null) {
-    alert('Ticket price missing. Cannot resell.');
-    return;
-  }
-
-  // --- User confirmation ---
-  const confirmed = window.confirm(
-    `Confirm resale of ${ticket.ticket_id}?\nThis will be sold at face value (₹${price}) back to the pool.`
-  );
-
-  if (!confirmed) return;
-
-  setProcessing(true);
-
-  try {
-    // ===============================
-    // 1️⃣ BLOCKCHAIN BURN (OPTIONAL)
-    // ===============================
-    let txHash = null;
-
-
-
-    // ===============================
-    // 2️⃣ UPDATE TICKET STATUS (DB)
-    // ===============================
-    const updatedTicket = await returnTicket(ticket.id);
-
-    if (!updatedTicket) {
-      throw new Error('Failed to mark ticket as returned in DB');
+  // Resell ticket handler
+  const resellTicket = async (ticket) => {
+    // Validation
+    if (!ticket || !ticket.id || !ticket.ticket_id) {
+      alert('Invalid ticket data');
+      return;
     }
 
-    // ===============================
-    // 3️⃣ REFUND USER (WALLET / BALANCE)
-    // ===============================
-    await updateUserBalance(
-      user.id,
-      price,
-      'Ticket resale refund'
+    if (ticket.owner_id !== authUser.id) {
+      alert('You can only resell your own tickets');
+      return;
+    }
+
+    const price = ticket.events?.price;
+    if (price == null) {
+      alert('Ticket price missing. Cannot resell.');
+      return;
+    }
+
+    // User confirmation
+    const confirmed = window.confirm(
+      `Confirm resale of ${ticket.ticket_id}?\nThis will be sold at face value (₹${price}) back to the pool.`
     );
 
-    // ===============================
-    // 4️⃣ LEDGER ENTRY (BUSINESS)
-    // ===============================
-    await addLedgerEntry('TICKET_RESALE', {
-      ticketId: ticket.ticket_id,
-      userId: user.id,
-      amount: price,
-      txHash,
-      reason: 'User initiated resale',
-    });
+    if (!confirmed) return;
 
-    // ===============================
-    // 5️⃣ UPDATE UI STATE
-    // ===============================
-    setMyTickets((prev) => prev.filter((t) => t.id !== ticket.id));
+    setProcessing(true);
 
-    alert('Ticket returned to pool. Refund processed successfully.');
-  } catch (err) {
-    console.error('Resale failed:', err);
-    alert(err.message || 'Resale failed. Please try again.');
-  } finally {
-    setProcessing(false);
-  }
-};
+    try {
+      // Update ticket status in database
+      const updatedTicket = await returnTicket(ticket.id);
 
-  const simulateScan = (ticket) => { setProcessing(true); setTimeout(() => { setProcessing(false); if (ticket.status !== 'ACTIVE') setScanResult('invalid'); else if (ticket.bioHash === user.bioHash) setScanResult('valid'); else setScanResult('mismatch'); }, 1500); };
+      if (!updatedTicket) {
+        throw new Error('Failed to mark ticket as returned in DB');
+      }
 
-  const handleSignOut = async () => { try { const supabase = createClient(); await supabase.auth.signOut(); setAuthUser(null); router.push('/login'); } catch (err) { console.error('Sign out failed', err); } };
+      // Refund user
+      await updateUserBalance(
+        authUser.id,
+        price,
+        `TICKET_RESALE:${ticket.ticket_id}`
+      );
+
+      setBalance(prev => prev + price);
+
+      // Add ledger entry
+      await addLedgerEntry('TICKET_RESALE', {
+        ticketId: ticket.ticket_id,
+        userId: authUser.id,
+        amount: price,
+        reason: 'User initiated resale',
+      });
+
+      // Update UI
+      setMyTickets(prev => prev.filter(t => t.id !== ticket.id));
+
+      alert('Ticket returned to pool. Refund processed successfully.');
+    } catch (err) {
+      console.error('Resale failed:', err);
+      alert(err.message || 'Resale failed. Please try again.');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  // Venue scanner simulation
+  const simulateScan = (ticket) => {
+    setProcessing(true);
+    setTimeout(() => {
+      setProcessing(false);
+      if (ticket.status !== 'ACTIVE') {
+        setScanResult('invalid');
+      } else if (ticket.bioHash === user.bioHash) {
+        setScanResult('valid');
+      } else {
+        setScanResult('mismatch');
+      }
+    }, 1500);
+  };
+
+  // Sign out handler
+  const handleSignOut = async () => {
+    try {
+      const supabase = createClient();
+      await supabase.auth.signOut();
+      router.push('/login');
+    } catch (err) {
+      console.error('Sign out failed:', err);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 flex flex-col">
-      <Navbar view={view} setView={setView} authUser={authUser} setAccountOpen={setAccountOpen} accountOpen={accountOpen} handleSignOut={handleSignOut} isAdmin={isAdmin} />
-      <div className="grow">
-        {view === 'marketplace' && <EventsMarketplace setSelectedEvent={setSelectedEvent} />}
-        {view === 'wallet' && <MyTickets myTickets={myTickets} resellTicket={resellTicket} setView={setView} userId={authUser?.id} />}
-        {view === 'dashboard' && <Ledger ledger={ledger} />}
-        {view === 'scanner' && <VenueScanner processing={processing} scanResult={scanResult} myTickets={myTickets} simulateScan={simulateScan} setProcessing={setProcessing} setScanResult={setScanResult} />}
-        {view === 'user-profile' && <UserDashboard authUser={authUser} />}
-        {view === 'admin-events' && isAdmin && <AdminDashboard />}
-{view === 'balance' && (
-  <Balance
-    balance={balance}
-    setBalance={setBalance}
-    userId={authUser?.id}
-  />
-)}
+      <Navbar
+        view={view}
+        setView={setView}
+        authUser={authUser}
+        setAccountOpen={setAccountOpen}
+        accountOpen={accountOpen}
+        handleSignOut={handleSignOut}
+        isAdmin={isAdmin}
+      />
 
-        {view === 'admin-events' && !isAdmin && <div className="p-8 text-center text-red-600"><p>Access denied. Admin privileges required.</p></div>}
+      <div className="grow">
+        {view === 'marketplace' && (
+          <EventsMarketplace setSelectedEvent={setSelectedEvent} />
+        )}
+        
+        {view === 'wallet' && (
+          <MyTickets
+            myTickets={myTickets}
+            resellTicket={resellTicket}
+            setView={setView}
+            userId={authUser?.id}
+          />
+        )}
+        
+        {view === 'dashboard' && <Ledger ledger={ledger} />}
+        
+        {view === 'scanner' && (
+          <VenueScanner
+            processing={processing}
+            scanResult={scanResult}
+            myTickets={myTickets}
+            simulateScan={simulateScan}
+            setProcessing={setProcessing}
+            setScanResult={setScanResult}
+          />
+        )}
+        
+        {view === 'user-profile' && <UserDashboard authUser={authUser} />}
+        
+        {view === 'balance' && (
+          <Balance
+            balance={balance}
+            setBalance={setBalance}
+            userId={authUser?.id}
+          />
+        )}
+        
+        {view === 'admin-events' && isAdmin && <AdminDashboard />}
+        
+        {view === 'admin-events' && !isAdmin && (
+          <div className="p-8 text-center text-red-600">
+            <p>Access denied. Admin privileges required.</p>
+          </div>
+        )}
       </div>
 
-      {selectedEvent && !user.verified && <IdentityVerification isScanningFace={isScanningFace} user={user} scanProgress={scanProgress} handleVerifyIdentity={handleVerifyIdentity} selectedEvent={selectedEvent} buyTicket={buyTicket} processing={processing} />}
+      {/* Identity Verification Modal */}
+      {selectedEvent && !user.verified && (
+        <IdentityVerification
+          isScanningFace={isScanningFace}
+          user={user}
+          scanProgress={scanProgress}
+          handleVerifyIdentity={handleVerifyIdentity}
+          selectedEvent={selectedEvent}
+          buyTicket={buyTicket}
+          processing={processing}
+        />
+      )}
 
+      {/* Purchase Confirmation Modal */}
       {selectedEvent && user.verified && view !== 'scanner' && (
-        <div className="fixed bottom-6 right-6 z-40"><div className="bg-slate-900 text-white p-4 rounded-xl shadow-2xl max-w-sm border border-slate-700"><div className="flex justify-between items-start mb-2"><h4 className="font-bold text-emerald-400">Confirm Purchase</h4><button onClick={() => setSelectedEvent(null)} className="text-slate-500 hover:text-white"><XCircle size={16}/></button></div><p className="text-sm text-slate-300 mb-3">Buying <strong>{selectedEvent.title}</strong> for ₹{selectedEvent.price}. This ticket will be permanently linked to ID <strong>{user.id}</strong>.</p><button onClick={() => buyTicket(selectedEvent)} disabled={processing} className="w-full bg-emerald-600 hover:bg-emerald-700 py-2 rounded-lg font-bold text-sm transition-colors">{processing ? "Minting on Chain..." : "Confirm & Pay"}</button></div></div>
+        <div className="fixed bottom-6 right-6 z-40">
+          <div className="bg-slate-900 text-white p-4 rounded-xl shadow-2xl max-w-sm border border-slate-700">
+            <div className="flex justify-between items-start mb-2">
+              <h4 className="font-bold text-emerald-400">Confirm Purchase</h4>
+              <button
+                onClick={() => setSelectedEvent(null)}
+                className="text-slate-500 hover:text-white transition-colors"
+              >
+                <XCircle size={16} />
+              </button>
+            </div>
+            <p className="text-sm text-slate-300 mb-3">
+              Buying <strong>{selectedEvent.title}</strong> for ₹{selectedEvent.price}.
+              This ticket will be permanently linked to your verified identity.
+            </p>
+            <button
+              onClick={() => buyTicket(selectedEvent)}
+              disabled={processing}
+              className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-700 disabled:cursor-not-allowed py-2 rounded-lg font-bold text-sm transition-colors"
+            >
+              {processing ? "Processing..." : "Confirm & Pay"}
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Footer */}
-      <footer className="relative w-full border-t border-white/10 bg-linear-to-r from-slate-950 via-slate-950/95 to-slate-950 backdrop-blur-sm">
-        <div className="w-full px-8 py-4">
+      <footer className="relative w-full border-t border-slate-200 bg-white">
+        <div className="w-full px-8 py-6">
           <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
             {/* Left side - Links */}
-            <div className="flex flex-wrap gap-8 text-sm text-slate-400/90">
-              <a href="https://rvce.edu.in/department/ai_ml/main_department/" className="transition hover:text-emerald-300/80 font-medium">
+            <div className="flex flex-wrap gap-8 text-sm text-slate-600">
+              <a
+                href="https://rvce.edu.in/department/ai_ml/main_department/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="transition hover:text-emerald-600 font-medium"
+              >
                 Department of Artificial Intelligence and Machine Learning
               </a>
             </div>
 
             {/* Right side - Names */}
-            <div className="flex gap-12 text-sm text-slate-300">
-              <a href="https://github.com/theunmeshraj"><p className="font-semibold">Unmesh Raj</p></a>
+            <div className="flex gap-12 text-sm text-slate-700">
+              <a
+                href="https://github.com/theunmeshraj"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold hover:text-emerald-600 transition-colors"
+              >
+                Unmesh Raj
+              </a>
               <p className="font-semibold">Aditya K</p>
             </div>
           </div>
         </div>
       </footer>
 
-      <style dangerouslySetInnerHTML={{__html: `@keyframes scan { 0% { top: 0%; opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { top: 100%; opacity: 0; } } .animate-scan { animation: scan 2s linear infinite; }`}} />
+      {/* Scan animation styles */}
+      <style jsx>{`
+        @keyframes scan {
+          0% {
+            top: 0%;
+            opacity: 0;
+          }
+          10% {
+            opacity: 1;
+          }
+          90% {
+            opacity: 1;
+          }
+          100% {
+            top: 100%;
+            opacity: 0;
+          }
+        }
+        .animate-scan {
+          animation: scan 2s linear infinite;
+        }
+      `}</style>
     </div>
   );
 }
-

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Fingerprint, ShieldCheck, CheckCircle } from 'lucide-react';
+import Image from 'next/image';
 
 export function IdentityVerification({ isScanningFace, user, scanProgress, handleVerifyIdentity, selectedEvent, buyTicket, processing }) {
   return (
@@ -33,9 +34,14 @@ export function IdentityVerification({ isScanningFace, user, scanProgress, handl
         ) : isScanningFace ? (
           <div className="text-center py-8">
             <div className="relative w-32 h-32 mx-auto mb-6 rounded-full border-4 border-slate-100 overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-b from-emerald-500/20 to-transparent animate-pulse"></div>
+              <div className="absolute inset-0 bg-linear-to-b from-emerald-500/20 to-transparent animate-pulse"></div>
               <div className="absolute left-0 right-0 h-1 bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.8)] transition-all duration-200" style={{ top: `${scanProgress}%` }} />
-              <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user.name}`} alt="face" className="w-full h-full object-cover opacity-50" />
+              
+              <Image className="w-full h-full object-cover opacity-50"
+          src="https://api.dicebear.com/7.x/avataaars/svg?seed=${user.name}"
+          alt="face"
+        />
+
             </div>
             <h3 className="text-lg font-bold text-slate-800 animate-pulse">Generating Biometric Hash...</h3>
             <p className="text-sm text-slate-500 mt-2">Mapping facial landmarks to blockchain identity</p>

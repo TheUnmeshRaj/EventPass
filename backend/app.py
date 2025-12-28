@@ -103,3 +103,6 @@ def verify_face():
 
 if __name__ == "__main__":
     app.run(debug=True)
+
+
+# do the same thig for the

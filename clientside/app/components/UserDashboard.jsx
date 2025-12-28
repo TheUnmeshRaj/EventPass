@@ -1,14 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User, Mail, MapPin, Save, Edit2, CheckCircle, Camera, AlertCircle } from 'lucide-react';
-import {
-  updateUserProfile,
-  getUserProfile,
-  subscribeToUserProfile,
-  uploadUserAvatar,
-  getUserAvatarUrl
-} from '../../lib/supabase/database';
-
-
+import {updateUserProfile,getUserProfile,subscribeToUserProfile,uploadUserAvatar,getUserAvatarUrl} from '../../lib/supabase/database';
 
 export function UserDashboard({ authUser }) {
   const [isEditing, setIsEditing] = useState(false);
@@ -17,18 +9,8 @@ export function UserDashboard({ authUser }) {
   const [message, setMessage] = useState(null);
   const [imageFile, setImageFile] = useState(null);
   const [preview, setPreview] = useState(null);
-
-  const [formData, setFormData] = useState({
-    full_name: '',
-    email: '',
-    phone: '',
-    address: '',
-    city: '',
-    state: '',
-    pincode: '',
-    government_id: '',
-    id_type: 'aadhaar',
-  });
+  const [formData, setFormData] = useState({full_name: '', email: '', phone: '', address: '', city: '', state: '', pincode: '', government_id: '', id_type: 'aadhaar',});
+  
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -38,12 +20,10 @@ export function UserDashboard({ authUser }) {
         setLoading(true);
         const profile = await getUserProfile(authUser.id);
 
-        // Set avatar preview
         const avatarUrl = getUserAvatarUrl(authUser.id);
         setPreview(avatarUrl || null);
 
         if (profile) {
-          // Map profile data to formData structure
           setFormData({
             full_name: profile.full_name || '',
             email: profile.email || authUser.email || '',
@@ -56,7 +36,6 @@ export function UserDashboard({ authUser }) {
             id_type: profile.id_type || 'aadhaar',
           });
         } else {
-          // Fallback to auth user metadata only
           setFormData({
             full_name: authUser.user_metadata?.full_name || authUser.user_metadata?.name || '',
             email: authUser.email || '',
@@ -71,7 +50,6 @@ export function UserDashboard({ authUser }) {
         }
       } catch (error) {
         console.error('Failed to fetch profile:', error);
-        // Set minimal data from auth user
         setFormData({
           full_name: authUser.user_metadata?.full_name || '',
           email: authUser.email || '',
