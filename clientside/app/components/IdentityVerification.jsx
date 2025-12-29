@@ -53,7 +53,24 @@ export function IdentityVerification({ isScanningFace, user, scanProgress, handl
             <CheckCircle size={64} className="text-emerald-500 mx-auto mb-4" />
             <h3 className="text-xl font-bold text-slate-900">Identity Verified</h3>
             <p className="text-sm text-slate-500 mb-6">Your biometric hash: <span className="font-mono text-xs bg-slate-100 p-1 rounded">{user.bioHash?.substring(0,16)}...</span></p>
-            <button onClick={() => { if (selectedEvent) buyTicket(selectedEvent); }} className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold">{processing ? "Minting Ticket..." : `Confirm Purchase (₹${selectedEvent?.price})`}</button>
+            
+            {/* <button onClick={() => { if (selectedEvent) buyTicket(selectedEvent); }} className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold">{processing ? "Minting Ticket..." : `Confirm Purchase (₹${selectedEvent?.price})`}</button> */}
+
+            <button
+  disabled={processing}
+  onClick={() => {
+    if (!processing && selectedEvent) {
+      buyTicket(selectedEvent);
+    }
+  }}
+  className={`w-full py-3 rounded-xl font-bold ${
+    processing ? "bg-slate-400 cursor-not-allowed" : "bg-slate-900 text-white"
+  }`}
+>
+  {processing ? "Minting Ticket..." : `Confirm Purchase (₹${selectedEvent?.price})`}
+</button>
+
+
           </div>
         )}
       </div>

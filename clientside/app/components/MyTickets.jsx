@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Ticket, ShieldCheck, Lock, Activity, RefreshCcw } from 'lucide-react';
 import { subscribeToUserTickets } from '../../lib/supabase/database';
+import { QRCodeCanvas } from "qrcode.react";
 
 export function MyTickets({ myTickets, resellTicket, setView, userId }) {
   useEffect(() => {
@@ -43,10 +44,27 @@ export function MyTickets({ myTickets, resellTicket, setView, userId }) {
                 </div>
               </div>
               <div className="md:w-2/3 p-6 flex flex-col md:flex-row items-center justify-between gap-6">
+                
                 <div className="flex flex-col items-center">
-                  <div className="bg-white p-2 rounded-lg border border-slate-200 shadow-inner"><Ticket size={120} className="text-slate-900" /></div>
-                  <div className="text-xs font-mono text-slate-400 mt-2">{ticket.ticket_id}</div>
-                </div>
+  <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-inner">
+<QRCodeCanvas
+  value={JSON.stringify({
+    user_id: userId,
+    event_id: ticket.event_id
+  })}
+  size={120}
+  level="H"
+  includeMargin
+/>
+
+  </div>
+  <div className="text-xs font-mono text-slate-400 mt-2">
+    {ticket.ticket_id}
+  </div>
+</div>
+
+
+
                 <div className="flex-1 space-y-3 w-full">
                   <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100">
                     <div className="flex items-center gap-2 text-emerald-800 font-medium text-sm mb-1"><Lock size={14} /> Anti-Scalp Lock Active</div>
