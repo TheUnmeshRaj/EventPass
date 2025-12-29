@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Search, MapPin, Calendar, IndianRupee } from 'lucide-react';
 import { getAllEvents, subscribeToEvents } from '../../lib/supabase/database';
 

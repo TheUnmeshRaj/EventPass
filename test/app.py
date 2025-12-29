@@ -5,9 +5,6 @@ from numpy.linalg import norm
 from supabase import create_client
 import os
 
-# =========================
-# CONFIG
-# =========================
 SUPABASE_URL = "https://oirysflqkblhxoehavox.supabase.co"
 SUPABASE_KEY = "sb_publishable_axPiudtnFLQIqHg_jD1jdg_58m38YwT"
 

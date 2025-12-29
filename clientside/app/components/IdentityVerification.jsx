@@ -16,7 +16,7 @@ export function IdentityVerification({ isScanningFace, user, scanProgress, handl
 
             <div className="space-y-4 mb-6">
               <div>
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Government ID (Aadhaar/PAN)</label>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">User ID (Aadhaar/PAN/Unique ID)</label>
                 <div className="flex items-center gap-2 mt-1 p-3 bg-slate-50 rounded-lg border border-slate-200">
                   <ShieldCheck size={18} className="text-slate-400" />
                   <span className="font-mono text-slate-700">{user.id}</span>
