@@ -52,7 +52,7 @@ export function MyTickets({ myTickets, resellTicket, setView, userId }) {
     user_id: userId,
     event_id: ticket.event_id
   })}
-  size={300}
+  size={200}
   level="H"
   includeMargin={true}
 />

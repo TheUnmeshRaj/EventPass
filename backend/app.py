@@ -15,7 +15,7 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
 
 FACE_MODEL = "Facenet512"
-MATCH_THRESHOLD = 0.7 
+MATCH_THRESHOLD = 70 
 
 supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
@@ -56,14 +56,6 @@ def extract_single_embedding(img):
 
 @app.route("/enroll", methods=["POST"])
 def enroll_face():
-    """
-    Body:
-    {
-        userId: string,
-        image: base64
-    }
-    """
-
     data = request.get_json(force=True)
     user_id = data.get("userId")
     image_base64 = data.get("image")
@@ -86,17 +78,9 @@ def enroll_face():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
+    
 @app.route("/verify-face-by-qr", methods=["POST"])
 def verify_face_by_qr():
-    """
-    Body:
-    {
-        user_id: string,
-        image: base64
-    }
-    """
-
     data = request.get_json(force=True)
     user_id = data.get("user_id")
     image_base64 = data.get("image")
@@ -104,41 +88,28 @@ def verify_face_by_qr():
     if not user_id or not image_base64:
         return jsonify({"error": "user_id and image required"}), 400
 
-    try:
-        # 1️⃣ Fetch stored embedding
-        res = supabase.table("user_profiles") \
-            .select("face_embedding") \
-            .eq("id", user_id) \
-            .execute()
-        if not res.data:
-            print("❌ User not found")
-            return
+    res = supabase.table("user_profiles") \
+        .select("face_embedding") \
+        .eq("id", user_id) \
+        .execute()
 
-        stored_embedding = res.data[0].get("face_embedding")
-        print("Stored embedding:", stored_embedding)
+    if not res.data:
+        return jsonify({"error": "User not found"}), 404
 
-        if not stored_embedding:
-            return jsonify({"error": "Face not enrolled"}), 404
-
-        stored_embedding = np.array(stored_embedding, dtype=np.float32)
-        print("🧬 Extracting live embedding...")
-        live_embedding = np.array(get_embedding(image_base64))
-
-        distance = np.linalg.norm(stored_embedding - live_embedding)
-        print(f"📏 Distance: {distance:.2f}")
-
-        is_match = distance < MATCH_THRESHOLD
-
-        return jsonify({
-            "success": True,
-            "match": bool(is_match),
-            "distance": float(distance),
-            "message": "Welcome" if is_match else "Face mismatch"
-        })
-
-    except Exception as e:
-        print("Error during verification:", str(e))
-        return jsonify({"error": str(e)}), 500
+    stored_embedding = res.data[0].get("face_embedding")
+    
+    if not stored_embedding:
+        return jsonify({"error": "Face not enrolled"}), 404
+    
+    stored_embedding = np.array(stored_embedding, dtype=np.float32)
+    live_embedding = np.array(get_embedding(image_base64))
+    distance = np.linalg.norm(stored_embedding - live_embedding)
+    is_match = distance < MATCH_THRESHOLD
+    return jsonify({
+        "success": True,
+        "match": bool(is_match),
+        "distance": float(distance)
+    })
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
