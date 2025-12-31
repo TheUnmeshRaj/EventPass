@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "../../lib/supabase/clients";
+import { signIn } from "next-auth/react";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -61,15 +62,11 @@ export default function LoginPage() {
     }
   };
 
-  const handleGoogle = async () => {
+  const handleGoogleSignIn = async () => {
     setLoading(true);
     setError(null);
     try {
-      const supabase = createClient();
-      const { error: oauthError } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-      });
-      if (oauthError) setError(oauthError.message || "OAuth failed");
+      await signIn("google");
     } catch (err) {
       setError(String(err));
     } finally {
@@ -287,7 +284,7 @@ export default function LoginPage() {
 
                   <button
                     type="button"
-                    onClick={handleGoogle}
+                    onClick={handleGoogleSignIn}
                     disabled={loading}
                     className="mt-3 flex w-full items-center justify-center gap-3 rounded-lg border border-white/20 bg-white/10 px-3 py-2.5 text-xs font-medium text-slate-50 shadow-md transition hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-slate-200/60 disabled:cursor-not-allowed disabled:opacity-70"
                   >
