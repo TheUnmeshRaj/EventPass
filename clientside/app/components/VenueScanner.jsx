@@ -1,222 +1,229 @@
-import React, { useEffect, useRef, useState } from "react";
-import { Lock, CheckCircle, XCircle, Upload, Camera } from "lucide-react";
-import { Html5Qrcode } from "html5-qrcode";
+import React, { useEffect, useRef, useState } from 'react';
+import {Lock,CheckCircle,UserCheck,XCircle,Camera,CameraOff} from 'lucide-react';
 
 export function VenueScanner({
   processing,
   scanResult,
   myTickets,
+  simulateScan,
   setProcessing,
   setScanResult,
 }) {
-  const scannerRef = useRef(null);
-  const fileInputRef = useRef(null);
   const videoRef = useRef(null);
+  const canvasRef = useRef(null);
   const streamRef = useRef(null);
 
-  const [qrData, setQrData] = useState(null);
-  const [faceMode, setFaceMode] = useState(false);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [cameraError, setCameraError] = useState(null);
 
-  // -----------------------------
-  // START QR SCANNER
-  // -----------------------------
   useEffect(() => {
-    if (myTickets.length === 0 || faceMode) return;
-
-    const startScanner = async () => {
+    const startCamera = async () => {
       try {
-        scannerRef.current = new Html5Qrcode("qr-reader");
-        await scannerRef.current.start(
-          { facingMode: "environment" },
-          { fps: 10, qrbox: { width: 350, height: 350 } },
-          handleQrResult
-        );
+        setCameraError(null);
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: 'user',
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+        });
+
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          streamRef.current = stream;
+          setCameraActive(true);
+        }
       } catch (err) {
-        console.error("QR start error:", err);
+        setCameraError(err.message || 'Unable to access camera');
+        console.error('Camera error:', err);
       }
     };
 
-    startScanner();
-    return stopQrScanner;
-  }, [myTickets, faceMode]);
+    startCamera();
 
-  const stopQrScanner = async () => {
-    if (!scannerRef.current) return;
-    try {
-      await scannerRef.current.stop();
-      await scannerRef.current.clear();
-    } catch {}
-    scannerRef.current = null;
-  };
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        setCameraActive(false);
+      }
+    };
+  }, []);
 
-  // -----------------------------
-  // SAFE PARSE QR
-  // -----------------------------
-  const parseQrPayload = (decodedText) => {
-    try {
-      let data = JSON.parse(decodedText);
-      if (typeof data === "string") data = JSON.parse(data);
-      return data;
-    } catch {
-      return null;
-    }
-  };
+  const captureFrame = async () => {
+    if (!videoRef.current || !canvasRef.current || !cameraActive) return;
+    if (myTickets.length === 0) return;
+    await fetch("/api/profile", { method: "POST" });
 
-  // -----------------------------
-  // HANDLE QR RESULT
-  // -----------------------------
-  const handleQrResult = async (decodedText) => {
+
     setProcessing(true);
 
-    const parsed = parseQrPayload(decodedText);
-    if (!parsed?.user_id || !parsed?.event_id) {
-      setScanResult("invalid");
-      setProcessing(false);
-      return;
-    }
-
-    const isValid = myTickets.some(
-      (t) => t.event_id === parsed.event_id && t.owner_id === parsed.user_id
-    );
-
-    if (!isValid) {
-      setScanResult("invalid");
-      setProcessing(false);
-      return;
-    }
-
-    await stopQrScanner();
-    setQrData(parsed);
-    setScanResult("valid");
-    setProcessing(false);
-  };
-
-  // -----------------------------
-  // UPLOAD QR IMAGE ✅
-  // -----------------------------
-  const handleFileUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
     try {
-      await stopQrScanner();
-      const imageScanner = new Html5Qrcode("qr-reader");
-      const decodedText = await imageScanner.scanFile(file, true);
-      await handleQrResult(decodedText);
-      await imageScanner.clear();
-    } catch (err) {
-      console.error("QR image scan failed:", err);
-      setScanResult("invalid");
+      const context = canvasRef.current.getContext('2d');
+      canvasRef.current.width = videoRef.current.videoWidth;
+      canvasRef.current.height = videoRef.current.videoHeight;
+      context.drawImage(videoRef.current, 0, 0);
+
+      // Convert canvas to base64
+      const imageBase64 = canvasRef.current.toDataURL('image/jpeg');
+
+      // Get ticket holder ID (first ticket)
+      const ticketHolderId = myTickets[0]?.owner_id || 'user1';
+
+      // Send to Flask backend
+      const response = await fetch('http://localhost:5000/api/verify-face', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image: imageBase64,
+          user_id: ticketHolderId,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setScanResult(result.result);
+        console.log('Face verification result:', result.similarity)
+      } else {
+        setScanResult('invalid');
+      }
+    } catch (error) {
+      console.error('Face verification error:', error);
+      setScanResult('invalid');
+    } finally {
+      setProcessing(false);
     }
   };
 
-  // -----------------------------
-  // FACE CAMERA
-  // -----------------------------
-  const startFaceCamera = async () => {
-    setFaceMode(true);
-
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "user" },
-    });
-
-    videoRef.current.srcObject = stream;
-    streamRef.current = stream;
-  };
-
-  const captureFace = async () => {
-    setProcessing(true);
-
-    const canvas = document.createElement("canvas");
-    canvas.width = videoRef.current.videoWidth;
-    canvas.height = videoRef.current.videoHeight;
-    canvas.getContext("2d").drawImage(videoRef.current, 0, 0);
-
-    const imageBase64 = canvas.toDataURL("image/jpeg");
-
-    const res = await fetch("http://localhost:5000/verify-face-by-qr", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        user_id: qrData.user_id,
-        image: imageBase64,
-      }),
-    });
-
-    const data = await res.json();
-    console.log("Face verification result:", data);
-    setScanResult(data.match ? "Welcome" : "invalid");
-    setProcessing(false);
-  };
-
-  // -----------------------------
-  // UI
-  // -----------------------------
   return (
-    <div className="p-6 bg-black text-white flex flex-col gap-6">
-      <div className="h-96 rounded-xl border border-slate-700 overflow-hidden">
-        {!faceMode ? (
-          <div id="qr-reader" className="w-full h-full" />
-        ) : (
-          <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
-        )}
-      </div>
-
-      {scanResult === "valid" && (
-        <div className="bg-green-600 p-3 rounded flex items-center gap-2">
-          <CheckCircle /> QR verified for user {qrData.user_id}
-        </div>
-      )}
-
-      {scanResult === "invalid" && (
-        <div className="bg-red-600 p-3 rounded flex items-center gap-2">
-          <XCircle /> Bakchodi
-        </div>
-      )}
-
-      {scanResult === "Welcome" && (
-        <div className="bg-emerald-600 p-4 rounded text-center text-2xl">
-          🎉 WELCOME 🎉
-        </div>
-      )}
-
-      {/* ACTIONS */}
-      {!faceMode && (
-        <>
-          <button
-            onClick={() => fileInputRef.current.click()}
-            className="bg-slate-800 hover:bg-slate-700 p-4 rounded flex items-center gap-2 justify-center"
-          >
-            <Upload /> Upload QR Image
-          </button>
-
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handleFileUpload}
-            className="hidden"
+    <div className="flex flex-col h-[calc(100vh-70px)] bg-black">
+      <div className="flex-1 flex items-center justify-center gap-8 p-6 bg-black">
+        {/* Camera on Left */}
+        <div className="relative w-full max-w-2xl h-96 bg-black rounded-3xl overflow-hidden border-2 border-slate-800 shadow-xl shrink-0">
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            className="w-full h-full object-cover"
+            style={{ display: cameraActive ? 'block' : 'none' }}
           />
-        </>
-      )}
 
-      {scanResult === "valid" && !faceMode && (
-        <button
-          onClick={startFaceCamera}
-          className="bg-emerald-600 hover:bg-emerald-700 p-4 rounded flex items-center gap-2 justify-center"
-        >
-          <Camera /> Proceed to Face Scan
-        </button>
-      )}
+          <canvas ref={canvasRef} className="hidden" />
 
-      {faceMode && scanResult === "valid" && (
-        <button
-          onClick={captureFace}
-          className="bg-emerald-600 hover:bg-emerald-700 p-4 rounded"
-        >
-          Capture Face
-        </button>
-      )}
+          {cameraError && (
+            <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80">
+              <div className="text-center">
+                <CameraOff
+                  size={48}
+                  className="mx-auto mb-4 text-red-500"
+                />
+                <p className="text-sm text-red-400">{cameraError}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Scan Results Overlay */}
+          {scanResult === 'valid' && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-emerald-500/90 text-white rounded-2xl z-40">
+              <CheckCircle size={64} className="mb-2" />
+              <h2 className="text-2xl font-bold">FACE VERIFIED</h2>
+              <p className="text-sm opacity-90">Biometric Match Confirmed</p>
+            </div>
+          )}
+          {scanResult === 'mismatch' && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-orange-500/90 text-white rounded-2xl z-40">
+              <UserCheck size={64} className="mb-2" />
+              <h2 className="text-2xl font-bold">ID MISMATCH</h2>
+              <p className="text-sm opacity-90">Biometrics do not match ticket owner</p>
+            </div>
+          )}
+          {scanResult === 'invalid' && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-600/90 text-white rounded-2xl z-40">
+              <XCircle size={64} className="mb-2" />
+              <h2 className="text-2xl font-bold">VERIFICATION FAILED</h2>
+              <p className="text-sm opacity-90">Unable to verify face</p>
+            </div>
+          )}
+
+          {processing && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/60 z-30">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500 mx-auto mb-2"></div>
+                <p className="text-emerald-400 text-sm">Scanning Face...</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Controls on Right */}
+        <div className="flex flex-col gap-6 h-96 justify-start">
+          <div>
+            <h3 className="flex items-center gap-2 font-bold text-white mb-2">
+              <Lock size={16} className="text-emerald-500" />
+              Face Scanner
+            </h3>
+            <p className="text-xs text-slate-400">
+              {cameraActive
+                ? 'Click button to scan'
+                : cameraError
+                ? 'Camera unavailable'
+                : 'Initializing...'}
+            </p>
+          </div>
+
+          {cameraActive && !cameraError && myTickets.length > 0 ? (
+            <button
+              onClick={captureFrame}
+              disabled={processing}
+              className="flex flex-col items-center justify-center gap-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 p-6 text-white transition-all h-fit"
+            >
+              <Camera size={32} />
+              <span className="text-sm font-medium">Capture Face</span>
+            </button>
+          ) : myTickets.length > 0 && cameraError ? (
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => simulateScan(myTickets[0])}
+                disabled={processing}
+                className="flex flex-col items-center justify-center gap-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 p-6 text-white transition-all"
+              >
+                <CheckCircle size={32} />
+                <span className="text-sm font-medium">Scan Valid</span>
+              </button>
+              <button
+                onClick={() => {
+                  setProcessing(true);
+                  setTimeout(() => {
+                    setScanResult('mismatch');
+                    setProcessing(false);
+                  }, 1500);
+                }}
+                disabled={processing}
+                className="flex flex-col items-center justify-center gap-3 rounded-2xl bg-orange-600 hover:bg-orange-700 disabled:opacity-50 p-6 text-white transition-all"
+              >
+                <UserCheck size={32} />
+                <span className="text-sm font-medium">Simulate Mismatch</span>
+              </button>
+            </div>
+          ) : (
+            <div className="rounded-2xl border-2 border-dashed border-slate-700 bg-slate-800/50 p-6 text-center text-slate-500 text-xs">
+              {myTickets.length === 0
+                ? '📱 Purchase a ticket first'
+                : '⏳ Initializing camera...'}
+            </div>
+          )}
+
+          {scanResult && (
+            <button
+              onClick={() => setScanResult(null)}
+              className="text-sm text-slate-400 underline hover:text-white"
+            >
+              Reset
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

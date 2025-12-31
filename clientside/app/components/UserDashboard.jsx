@@ -120,29 +120,24 @@ export function UserDashboard({ authUser }) {
     setMessage(null);
 
     try {
-      // Upload avatar first if changed
       if (imageFile && authUser?.id) {
         try {
           await uploadUserAvatar(authUser.id, imageFile);
-          // Update preview with cache-busting
           setPreview(getUserAvatarUrl(authUser.id));
-          setImageFile(null); // Clear the file after successful upload
+          setImageFile(null); 
         } catch (uploadError) {
           console.error('Avatar upload failed:', uploadError);
           setMessage({
             type: 'error',
             text: 'Profile updated but avatar upload failed. Please try uploading the image again.'
           });
-          // Continue with profile update even if avatar fails
         }
       }
 if (imageFile && authUser?.id) {
   try {
-    // Convert image to base64 (RAM only)
     const imageBase64 = await fileToBase64(imageFile);
 
-    // Send to DeepFace backend
-    const res = await fetch("http://localhost:5001/enroll", {
+    const res = await fetch("http://localhost:5000/enroll", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

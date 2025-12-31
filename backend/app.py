@@ -1,29 +1,26 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
-from deepface import DeepFace
-import numpy as np
 import base64
-import cv2
-from supabase import create_client
+import os
 
-# -----------------------------
-# CONFIG
-# -----------------------------
+import cv2  # type:ignore
+import numpy as np  # type:ignore
+from deepface import DeepFace  # type:ignore
+from dotenv import load_dotenv  # type:ignore
+from flask import Flask, jsonify, request  # type:ignore
+from flask_cors import CORS  # type:ignore
+from supabase import create_client  # type:ignore
 
-SUPABASE_URL = "https://oirysflqkblhxoehavox.supabase.co"
-SUPABASE_SERVICE_KEY = "sb_publishable_axPiudtnFLQIqHg_jD1jdg_58m38YwT"  # ⚠️ move to env in prod
+load_dotenv()
+
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
 
 FACE_MODEL = "Facenet512"
-MATCH_THRESHOLD = 0.7  # tuned for Facenet512
+MATCH_THRESHOLD = 0.7 
 
 supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
 app = Flask(__name__)
 CORS(app)
-
-# -----------------------------
-# UTILS
-# -----------------------------
 
 def base64_to_image(base64_str: str):
     """Convert base64 image to OpenCV BGR image"""
@@ -57,10 +54,6 @@ def extract_single_embedding(img):
 
     return np.array(result[0]["embedding"], dtype=np.float32)
 
-# -----------------------------
-# ROUTES
-# -----------------------------
-
 @app.route("/enroll", methods=["POST"])
 def enroll_face():
     """
@@ -93,10 +86,6 @@ def enroll_face():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-# -----------------------------
-# VERIFY FACE AFTER QR
-# -----------------------------
 
 @app.route("/verify-face-by-qr", methods=["POST"])
 def verify_face_by_qr():
@@ -150,18 +139,6 @@ def verify_face_by_qr():
     except Exception as e:
         print("Error during verification:", str(e))
         return jsonify({"error": str(e)}), 500
-
-# -----------------------------
-# HEALTH
-# -----------------------------
-
-@app.route("/health", methods=["GET"])
-def health():
-    return jsonify({"status": "ok"})
-
-# -----------------------------
-# START SERVER
-# -----------------------------
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
