@@ -4,7 +4,6 @@ from deepface import DeepFace
 import numpy as np
 import base64
 import cv2
-import os
 from supabase import create_client
 
 # -----------------------------
@@ -12,10 +11,10 @@ from supabase import create_client
 # -----------------------------
 
 SUPABASE_URL = "https://oirysflqkblhxoehavox.supabase.co"
-SUPABASE_SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9pcnlzZmxxa2JsaHhvZWhhdm94Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NjIxMDU0NywiZXhwIjoyMDgxNzg2NTQ3fQ.R2LroPmU1HpAzFsjvjNGiQQ7HAR-iIOll1KHqizRGnc"
+SUPABASE_SERVICE_KEY = "sb_publishable_axPiudtnFLQIqHg_jD1jdg_58m38YwT"  # ⚠️ move to env in prod
 
-if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
-    raise Exception("Supabase credentials not set in environment variables")
+FACE_MODEL = "Facenet512"
+MATCH_THRESHOLD = 0.7  # tuned for Facenet512
 
 supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
@@ -27,9 +26,7 @@ CORS(app)
 # -----------------------------
 
 def base64_to_image(base64_str: str):
-    """
-    Converts base64 image string to OpenCV image (numpy array)
-    """
+    """Convert base64 image to OpenCV BGR image"""
     try:
         img_bytes = base64.b64decode(base64_str.split(",")[1])
         np_arr = np.frombuffer(img_bytes, np.uint8)
@@ -38,6 +35,28 @@ def base64_to_image(base64_str: str):
     except Exception:
         raise ValueError("Invalid base64 image")
 
+def get_embedding(img_path):
+    result = DeepFace.represent(
+        img_path=img_path,
+        model_name=FACE_MODEL,
+        enforce_detection=True
+    )
+    return result[0]["embedding"]
+
+
+def extract_single_embedding(img):
+    """Extract exactly ONE face embedding"""
+    result = DeepFace.represent(
+        img_path=img,
+        model_name=FACE_MODEL,
+        enforce_detection=True
+    )
+
+    if not result or len(result) != 1:
+        raise ValueError("Exactly one face must be visible")
+
+    return np.array(result[0]["embedding"], dtype=np.float32)
+
 # -----------------------------
 # ROUTES
 # -----------------------------
@@ -45,41 +64,26 @@ def base64_to_image(base64_str: str):
 @app.route("/enroll", methods=["POST"])
 def enroll_face():
     """
-    Receives:
+    Body:
     {
         userId: string,
         image: base64
     }
-
-    Stores:
-    - face_embedding → user_profiles.face_embedding
     """
 
-    data = request.get_json()
+    data = request.get_json(force=True)
     user_id = data.get("userId")
     image_base64 = data.get("image")
 
     if not user_id or not image_base64:
-        return jsonify({
-            "error": "userId and image are required"
-        }), 400
+        return jsonify({"error": "userId and image required"}), 400
 
     try:
-        # Convert image (RAM only)
         img = base64_to_image(image_base64)
+        embedding = extract_single_embedding(img)
 
-        # Extract face embedding
-        result = DeepFace.represent(
-            img_path=img,
-            model_name="Facenet512",
-            enforce_detection=True
-        )
-
-        embedding = result[0]["embedding"]
-
-        # Store embedding in Supabase
         supabase.table("user_profiles").update({
-            "face_embedding": embedding
+            "face_embedding": embedding.tolist()
         }).eq("id", user_id).execute()
 
         return jsonify({
@@ -88,23 +92,76 @@ def enroll_face():
         })
 
     except Exception as e:
-        return jsonify({
-            "error": str(e)
-        }), 500
+        return jsonify({"error": str(e)}), 500
 
 # -----------------------------
-# HEALTH CHECK
+# VERIFY FACE AFTER QR
+# -----------------------------
+
+@app.route("/verify-face-by-qr", methods=["POST"])
+def verify_face_by_qr():
+    """
+    Body:
+    {
+        user_id: string,
+        image: base64
+    }
+    """
+
+    data = request.get_json(force=True)
+    user_id = data.get("user_id")
+    image_base64 = data.get("image")
+
+    if not user_id or not image_base64:
+        return jsonify({"error": "user_id and image required"}), 400
+
+    try:
+        # 1️⃣ Fetch stored embedding
+        res = supabase.table("user_profiles") \
+            .select("face_embedding") \
+            .eq("id", user_id) \
+            .execute()
+        if not res.data:
+            print("❌ User not found")
+            return
+
+        stored_embedding = res.data[0].get("face_embedding")
+        print("Stored embedding:", stored_embedding)
+
+        if not stored_embedding:
+            return jsonify({"error": "Face not enrolled"}), 404
+
+        stored_embedding = np.array(stored_embedding, dtype=np.float32)
+        print("🧬 Extracting live embedding...")
+        live_embedding = np.array(get_embedding(image_base64))
+
+        distance = np.linalg.norm(stored_embedding - live_embedding)
+        print(f"📏 Distance: {distance:.2f}")
+
+        is_match = distance < MATCH_THRESHOLD
+
+        return jsonify({
+            "success": True,
+            "match": bool(is_match),
+            "distance": float(distance),
+            "message": "Welcome" if is_match else "Face mismatch"
+        })
+
+    except Exception as e:
+        print("Error during verification:", str(e))
+        return jsonify({"error": str(e)}), 500
+
+# -----------------------------
+# HEALTH
 # -----------------------------
 
 @app.route("/health", methods=["GET"])
 def health():
-    return jsonify({
-        "status": "ok"
-    })
+    return jsonify({"status": "ok"})
 
 # -----------------------------
 # START SERVER
 # -----------------------------
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5001, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)

@@ -52,9 +52,9 @@ export function MyTickets({ myTickets, resellTicket, setView, userId }) {
     user_id: userId,
     event_id: ticket.event_id
   })}
-  size={120}
+  size={300}
   level="H"
-  includeMargin
+  includeMargin={true}
 />
 
   </div>
