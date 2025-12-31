@@ -25,7 +25,6 @@ export function VenueScanner({
   const [showQrOverlay, setShowQrOverlay] = useState(false);
 
 
-  // ---------- CAMERA ----------
   const startCamera = async () => {
     try {
       stopCamera();
@@ -76,7 +75,7 @@ export function VenueScanner({
 
     const parsed = parseQrPayload(decodedText);
     if (!parsed?.user_id || !parsed?.event_id) {
-      setScanResult("invalid");
+      setScanResult("EmptyQR");
       setProcessing(false);
       return;
     }
@@ -85,11 +84,18 @@ export function VenueScanner({
       t => t.owner_id === parsed.user_id && t.event_id === parsed.event_id
     );
 
-    if (!valid) {
-      setScanResult("invalid");
+    if (!valid && t.owner_id != parsed.user_id) {
+      setScanResult("invalidUserID");
       setProcessing(false);
       return;
     }
+
+    if (!valid && t.event_id === parsed.event_id) {
+      setScanResult("invalidEventID");
+      setProcessing(false);
+      return;
+    }
+
 
     await stopQrScanner();
     setQrData(parsed);
@@ -115,7 +121,7 @@ setTimeout(async () => {
   setShowQrOverlay(false);
   setMode("face");
   await startCamera();
-}, 1500);
+}, 1000);
 
 setProcessing(false);
 
@@ -131,11 +137,10 @@ setProcessing(false);
       const decodedText = await imageScanner.scanFile(file, true);
       await handleQrResult(decodedText);
       await imageScanner.clear();
-    } catch {
-      setScanResult("invalid");
-    }
-  };
-
+  }catch {
+      setScanResult("EmptyQR");
+    };
+  }
   // ---------- FACE ----------
   const captureFace = async () => {
     if (!qrData || !videoRef.current) return;
@@ -177,6 +182,7 @@ setProcessing(false);
       <div className="relative w-full max-w-2xl h-96 bg-black rounded-3xl overflow-hidden border-2 border-slate-800 shadow-xl">
 
         {mode === "qr" && (
+          
           <div id="qr-reader" className="w-full h-full" />
         )}
 
@@ -219,6 +225,24 @@ setProcessing(false);
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-600/90 text-white z-40">
             <XCircle size={64} />
             <h2 className="text-2xl font-bold">VERIFICATION FAILED</h2>
+          </div>
+        )}
+        {scanResult === "EmptyQR" && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-600/90 text-white z-40">
+            <XCircle size={64} />
+            <h2 className="text-2xl font-bold">QR code is invalid!</h2>
+          </div>
+        )}
+        {scanResult === "invalidUserID" && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-600/90 text-white z-40">
+            <XCircle size={64} />
+            <h2 className="text-2xl font-bold">User ID is invalid</h2>
+          </div>
+        )}
+        {scanResult === "invalidEventID" && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-600/90 text-white z-40">
+            <XCircle size={64} />
+            <h2 className="text-2xl font-bold">Event ID is invalid</h2>
           </div>
         )}
       </div>

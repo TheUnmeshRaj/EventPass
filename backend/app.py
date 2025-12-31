@@ -84,32 +84,35 @@ def verify_face_by_qr():
     data = request.get_json(force=True)
     user_id = data.get("user_id")
     image_base64 = data.get("image")
-
-    if not user_id or not image_base64:
-        return jsonify({"error": "user_id and image required"}), 400
-
-    res = supabase.table("user_profiles") \
-        .select("face_embedding") \
-        .eq("id", user_id) \
-        .execute()
-
-    if not res.data:
-        return jsonify({"error": "User not found"}), 404
-
-    stored_embedding = res.data[0].get("face_embedding")
     
-    if not stored_embedding:
-        return jsonify({"error": "Face not enrolled"}), 404
-    
-    stored_embedding = np.array(stored_embedding, dtype=np.float32)
-    live_embedding = np.array(get_embedding(image_base64))
-    distance = np.linalg.norm(stored_embedding - live_embedding)
-    is_match = distance < MATCH_THRESHOLD
-    return jsonify({
-        "success": True,
-        "match": bool(is_match),
-        "distance": float(distance)
-    })
+    try:
+        if not user_id or not image_base64:
+            return jsonify({"error": "user_id and image required"}), 400
 
+        res = supabase.table("user_profiles") \
+            .select("face_embedding") \
+            .eq("id", user_id) \
+            .execute()
+
+        if not res.data:
+            return jsonify({"error": "User not found"}), 404
+
+        stored_embedding = res.data[0].get("face_embedding")
+        
+        if not stored_embedding:
+            return jsonify({"error": "Face not enrolled"}), 404
+        
+        stored_embedding = np.array(stored_embedding, dtype=np.float32)
+        live_embedding = np.array(get_embedding(image_base64))
+        distance = np.linalg.norm(stored_embedding - live_embedding)
+        is_match = distance < MATCH_THRESHOLD
+        return jsonify({
+            "success": True,
+            "match": bool(is_match),
+            "distance": float(distance)
+        })
+    except Exception as e:
+        print(e)
+        return jsonify({"error": str(e)}), 500
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)

@@ -164,14 +164,6 @@ function SatyaTicketingApp({ authUser }) {
     }
   }, [scanProgress, isScanningFace, authUser.id]);
 
-  // Check admin status
-  useEffect(() => {
-    if (!authUser) return;
-    
-    const checkAdmin = authUser?.user_metadata?.role === 'admin' || 
-                       authUser?.email?.includes('admin');
-    setIsAdmin(checkAdmin);
-  }, [authUser]);
 
   // Load user balance
   useEffect(() => {
