@@ -7,7 +7,7 @@ export const subscribeToUserProfile = (userId: string, callback: (data: Record<s
   const supabase = createClient();
   const subscription = supabase
     .channel(`user_profile:${userId}`)
-    .on('postgres_changes', 
+    .on('postgres_changes',
       { event: '*', schema: 'public', table: 'user_profiles', filter: `id=eq.${userId}` },
       (payload) => {
         callback(payload.new);
@@ -92,8 +92,8 @@ export const updateUserProfile = async (userId: string, profileData: Record<stri
 export const uploadUserAvatar = async (userId: string, file: File) => {
   const supabase = createClient();
 
-  const fileExt = file.name.split('.').pop();
-  const fileName = `${userId}.${fileExt}`;
+  // Always use .png for internal storage consistency
+  const fileName = `${userId}.png`;
 
   const { error } = await supabase.storage
     .from('avatars')
@@ -114,10 +114,10 @@ export const uploadUserAvatar = async (userId: string, file: File) => {
 export const getUserAvatarUrl = (userId: string) => {
   const supabase = createClient();
   const timestamp = Date.now();
-  
+
   const { data } = supabase.storage
-  .from('avatars')
-  .getPublicUrl(`${userId}.png`);
+    .from('avatars')
+    .getPublicUrl(`${userId}.png`);
 
   console.log("Try kiya at timestamdp:", timestamp, ") from usl:", data.publicUrl);
   return data.publicUrl;
