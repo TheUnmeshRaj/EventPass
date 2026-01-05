@@ -9,7 +9,16 @@ const formatUnknownDetails = (details) => {
     .join(' • ');
 };
 
-export function Ledger({ ledger = [], loading = false }) {
+const looksLikeLedgerUserId = (value) => typeof value === 'string' && value.includes('-');
+
+const resolveLedgerUser = (value, userLookup) => {
+  if (!value) return null;
+  if (typeof value !== 'string') return value;
+  if (!looksLikeLedgerUserId(value)) return value;
+  return userLookup?.[value] || value;
+};
+
+export function Ledger({ ledger = [], loading = false, userLookup = {} }) {
   const renderDetails = (block) => {
     const details = block?.details;
 
@@ -25,6 +34,9 @@ export function Ledger({ ledger = [], loading = false }) {
     const price = details.price ?? details.amount ?? details.refundAmount;
     const buyer = details.buyer || details.buyerId;
     const seller = details.userId || details.sellerId || details.prevOwner;
+    const buyerLabel = resolveLedgerUser(buyer, userLookup) || buyer;
+    const sellerLabel = resolveLedgerUser(seller, userLookup) || seller;
+    const balanceUserLabel = resolveLedgerUser(details.userId || details.user_id, userLookup);
 
     switch (block.type) {
       case 'MINT':
@@ -32,7 +44,7 @@ export function Ledger({ ledger = [], loading = false }) {
         return (
           <span>
             Minted <span className="text-white">{ticketId || 'ticket'}</span>
-            {buyer && <> for {buyer}</>}
+            {buyerLabel && <> for {buyerLabel}</>}
             {price && <> at <span className="text-emerald-400">₹{price}</span></>}
             {details.txHash && <> (tx: <span className="text-slate-400">{details.txHash}</span>)</>}
           </span>
@@ -40,20 +52,20 @@ export function Ledger({ ledger = [], loading = false }) {
       case 'BURN':
         return (
           <span>
-            Ticket <span className="text-white">{ticketId || 'ticket'}</span> returned by {seller || 'user'}
+            Ticket <span className="text-white">{ticketId || 'ticket'}</span> returned by {sellerLabel || 'user'}
           </span>
         );
       case 'TICKET_RESALE':
         return (
           <span>
-            Ticket <span className="text-white">{ticketId || 'ticket'}</span> resold by {seller || 'user'} for{' '}
+            Ticket <span className="text-white">{ticketId || 'ticket'}</span> resold by {sellerLabel || 'user'} for{' '}
             <span className="text-emerald-400">₹{price}</span>
           </span>
         );
       case 'BALANCE_UPDATE':
         return (
           <span>
-            Balance {details.delta >= 0 ? 'credit' : 'debit'} for {details.userId || 'user'}{' '}
+            Balance {details.delta >= 0 ? 'credit' : 'debit'} for {balanceUserLabel || 'user'}{' '}
             <span className="text-emerald-400">₹{Math.abs(details.delta || 0)}</span>
             {details.reason && <> ({details.reason})</>}
           </span>
@@ -112,8 +124,8 @@ export function Ledger({ ledger = [], loading = false }) {
               <div className="w-32">
                 <span className={`px-2 py-1 rounded text-xs font-bold ${block.type === 'MINT' || block.type === 'ONCHAIN_MINT'
                   ? 'bg-emerald-900 text-emerald-400'
-                  : block.type === 'BURN'
-                    ? 'bg-red-900 text-red-400'
+                  : block.type === 'BALANCE_UPDATE'
+                    ? 'bg-green-900 text-green-400'
                     : 'bg-blue-900 text-blue-400'
                 }`}>{block.type}</span>
               </div>
