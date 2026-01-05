@@ -333,6 +333,23 @@ export const getLedgerHistory = async (limit: number = 50) => {
   return data || [];
 };
 
+export const getUserProfilesByIds = async (userIds: string[]) => {
+  if (!userIds?.length) return [];
+
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('user_profiles')
+    .select('id, full_name, email')
+    .in('id', userIds);
+
+  if (error) {
+    console.error('Error fetching user profiles by ids:', error);
+    return [];
+  }
+
+  return data || [];
+};
+
 export const getUserBalance = async (userId: string) => {
   const supabase = createClient();
   const { data, error } = await supabase

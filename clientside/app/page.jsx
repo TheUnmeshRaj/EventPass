@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '../lib/supabase/clients';
 
@@ -18,7 +18,8 @@ import {
   getUserProfile,
   subscribeToUserProfile,
   uploadUserAvatar,
-  getUserAvatarUrl
+  getUserAvatarUrl,
+  getUserProfilesByIds
 } from '../lib/supabase/database';
 
 import { XCircle } from 'lucide-react';
@@ -55,6 +56,44 @@ const generateHash = (data) => {
 };
 
 const generateTicketId = () => `TKT-${Math.floor(Math.random() * 100000)}`;
+
+const LEDGER_USER_FIELDS = [
+  'userId',
+  'user_id',
+  'buyer',
+  'buyerId',
+  'buyer_id',
+  'seller',
+  'sellerId',
+  'seller_id',
+  'prevOwner',
+  'ownerId',
+  'owner_id',
+  'recipient',
+  'recipient_id',
+  'referrerId',
+  'referrer_id'
+];
+
+const looksLikeLedgerUserId = (value) => typeof value === 'string' && value.includes('-');
+
+const extractLedgerUserIds = (entry) => {
+  const ids = new Set();
+  const details = entry?.details;
+
+  if (!details || typeof details !== 'object') {
+    return ids;
+  }
+
+  LEDGER_USER_FIELDS.forEach((field) => {
+    const candidate = details[field];
+    if (typeof candidate === 'string' && looksLikeLedgerUserId(candidate)) {
+      ids.add(candidate);
+    }
+  });
+
+  return ids;
+};
 
 const parseLedgerDetails = (details) => {
   if (!details) return {};
@@ -179,6 +218,41 @@ function SatyaTicketingApp({ authUser }) {
   const [myTickets, setMyTickets] = useState([]);
   const [ledger, setLedger] = useState(() => INITIAL_LEDGER.map(normalizeLedgerEntry));
   const [isLedgerLoading, setIsLedgerLoading] = useState(true);
+  const [ledgerUsers, setLedgerUsers] = useState({});
+  const ledgerUsersRef = useRef({});
+
+  const upsertLedgerUsers = useCallback(async (entries) => {
+    if (!entries?.length) return;
+
+    const candidateIds = new Set();
+    entries.forEach((entry) => {
+      extractLedgerUserIds(entry).forEach((id) => candidateIds.add(id));
+    });
+
+    const missingIds = Array.from(candidateIds).filter((id) => !ledgerUsersRef.current[id]);
+    if (!missingIds.length) return;
+
+    try {
+      const profiles = await getUserProfilesByIds(missingIds);
+      if (!profiles?.length) return;
+
+      setLedgerUsers((prev) => {
+        const next = { ...prev };
+        profiles.forEach((profile) => {
+          const label = profile.full_name || profile.email || profile.id;
+          next[profile.id] = label;
+        });
+        ledgerUsersRef.current = next;
+        return next;
+      });
+    } catch (err) {
+      console.error('Failed to resolve ledger usernames:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    ledgerUsersRef.current = ledgerUsers;
+  }, [ledgerUsers]);
 
   // Face scan progress animation
   useEffect(() => {
@@ -265,11 +339,10 @@ function SatyaTicketingApp({ authUser }) {
       try {
         const history = await getLedgerHistory(100);
         if (!isMounted) return;
-        if (history?.length) {
-          setLedger(history.map(normalizeLedgerEntry));
-        } else {
-          setLedger(INITIAL_LEDGER.map(normalizeLedgerEntry));
-        }
+        const source = history?.length ? history : INITIAL_LEDGER;
+        const normalized = source.map(normalizeLedgerEntry);
+        setLedger(normalized);
+        await upsertLedgerUsers(normalized);
       } catch (err) {
         console.error('Failed to load ledger:', err);
       } finally {
@@ -284,14 +357,15 @@ function SatyaTicketingApp({ authUser }) {
     try {
       ledgerSubscription = subscribeToLedger((payload) => {
         if (!payload) return;
+        const formatted = normalizeLedgerEntry(payload);
         setLedger(prev => {
-          const formatted = normalizeLedgerEntry(payload);
           const exists = prev.some(entry => entry.id === formatted.id);
           if (exists) {
             return prev.map(entry => entry.id === formatted.id ? formatted : entry);
           }
           return [formatted, ...prev].slice(0, 200);
         });
+        upsertLedgerUsers([formatted]);
       });
     } catch (err) {
       console.error('Failed to subscribe to ledger:', err);
@@ -301,7 +375,7 @@ function SatyaTicketingApp({ authUser }) {
       isMounted = false;
       ledgerSubscription?.unsubscribe?.();
     };
-  }, []);
+  }, [upsertLedgerUsers]);
 
   // Ledger functions
   const addToLedger = (type, details) => {
@@ -312,6 +386,7 @@ function SatyaTicketingApp({ authUser }) {
       timestamp: Date.now()
     });
     setLedger(prev => [newBlock, ...prev]);
+    upsertLedgerUsers([newBlock]);
     return newBlock.hash;
   };
 
@@ -549,7 +624,7 @@ function SatyaTicketingApp({ authUser }) {
           />
         )}
         
-        {view === 'dashboard' && <Ledger ledger={ledger} loading={isLedgerLoading} />}
+        {view === 'dashboard' && <Ledger ledger={ledger} loading={isLedgerLoading} userLookup={ledgerUsers} />}
         
         {view === 'scanner' && (
           <VenueScanner
