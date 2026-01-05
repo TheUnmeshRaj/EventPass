@@ -10,6 +10,8 @@ import {
   subscribeToUserTickets,
   getUserTickets,
   addLedgerEntry,
+  getLedgerHistory,
+  subscribeToLedger,
   getUserBalance,
   updateUserBalance,
   updateUserProfile,
@@ -53,6 +55,43 @@ const generateHash = (data) => {
 };
 
 const generateTicketId = () => `TKT-${Math.floor(Math.random() * 100000)}`;
+
+const parseLedgerDetails = (details) => {
+  if (!details) return {};
+  if (typeof details === 'object') return details;
+  try {
+    return JSON.parse(details);
+  } catch {
+    return { message: details };
+  }
+};
+
+const deriveLedgerHash = (entry, details) => {
+  if (entry?.hash) return entry.hash;
+  if (typeof details?.txHash === 'string' && details.txHash.length) return details.txHash;
+  if (entry?.id) return String(entry.id).replace(/-/g, '').slice(0, 16);
+
+  const base = `${entry?.type || 'LEDGER'}-${JSON.stringify(details)}-${entry?.created_at || entry?.timestamp || Date.now()}`;
+  let hash = 0;
+  for (let i = 0; i < base.length; i++) {
+    hash = (hash << 5) - hash + base.charCodeAt(i);
+    hash |= 0;
+  }
+  return `0x${(hash >>> 0).toString(16)}`;
+};
+
+const normalizeLedgerEntry = (entry = {}) => {
+  const details = parseLedgerDetails(entry.details);
+  const timestamp = entry.timestamp || entry.created_at || Date.now();
+  const hash = deriveLedgerHash(entry, details);
+  return {
+    id: entry.id || hash,
+    hash,
+    type: entry.type || 'UNKNOWN',
+    details,
+    timestamp,
+  };
+};
 
 // Main Page Component with Auth Check
 export default function SatyaTicketingPage() {
@@ -138,7 +177,8 @@ function SatyaTicketingApp({ authUser }) {
   // Data state
   const [balance, setBalance] = useState(0);
   const [myTickets, setMyTickets] = useState([]);
-  const [ledger, setLedger] = useState(INITIAL_LEDGER);
+  const [ledger, setLedger] = useState(() => INITIAL_LEDGER.map(normalizeLedgerEntry));
+  const [isLedgerLoading, setIsLedgerLoading] = useState(true);
 
   // Face scan progress animation
   useEffect(() => {
@@ -217,14 +257,60 @@ function SatyaTicketingApp({ authUser }) {
     return () => subscription?.unsubscribe?.();
   }, [authUser?.id]);
 
+  useEffect(() => {
+    let isMounted = true;
+    let ledgerSubscription;
+
+    const loadLedger = async () => {
+      try {
+        const history = await getLedgerHistory(100);
+        if (!isMounted) return;
+        if (history?.length) {
+          setLedger(history.map(normalizeLedgerEntry));
+        } else {
+          setLedger(INITIAL_LEDGER.map(normalizeLedgerEntry));
+        }
+      } catch (err) {
+        console.error('Failed to load ledger:', err);
+      } finally {
+        if (isMounted) {
+          setIsLedgerLoading(false);
+        }
+      }
+    };
+
+    loadLedger();
+
+    try {
+      ledgerSubscription = subscribeToLedger((payload) => {
+        if (!payload) return;
+        setLedger(prev => {
+          const formatted = normalizeLedgerEntry(payload);
+          const exists = prev.some(entry => entry.id === formatted.id);
+          if (exists) {
+            return prev.map(entry => entry.id === formatted.id ? formatted : entry);
+          }
+          return [formatted, ...prev].slice(0, 200);
+        });
+      });
+    } catch (err) {
+      console.error('Failed to subscribe to ledger:', err);
+    }
+
+    return () => {
+      isMounted = false;
+      ledgerSubscription?.unsubscribe?.();
+    };
+  }, []);
+
   // Ledger functions
   const addToLedger = (type, details) => {
-    const newBlock = {
+    const newBlock = normalizeLedgerEntry({
       hash: generateHash(JSON.stringify(details) + Date.now()),
       type,
       details,
       timestamp: Date.now()
-    };
+    });
     setLedger(prev => [newBlock, ...prev]);
     return newBlock.hash;
   };
@@ -463,7 +549,7 @@ function SatyaTicketingApp({ authUser }) {
           />
         )}
         
-        {view === 'dashboard' && <Ledger ledger={ledger} />}
+        {view === 'dashboard' && <Ledger ledger={ledger} loading={isLedgerLoading} />}
         
         {view === 'scanner' && (
           <VenueScanner
