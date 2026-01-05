@@ -137,7 +137,7 @@ if (imageFile && authUser?.id) {
   try {
     const imageBase64 = await fileToBase64(imageFile);
 
-    const res = await fetch("http://localhost:5000/enroll", {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/enroll`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
