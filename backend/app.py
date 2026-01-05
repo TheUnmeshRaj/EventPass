@@ -14,8 +14,13 @@ load_dotenv()
 SUPABASE_URL = os.getenv("SUPABASE_URL") or os.getenv("NEXT_PUBLIC_SUPABASE_URL")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("NEXT_PUBLIC_SUPABASE_SERVICE_KEY") or os.getenv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY")
 
-FACE_MODEL = "Facenet512"
-MATCH_THRESHOLD = 70 
+print(f"DEBUG: SUPABASE_URL is {'set' if SUPABASE_URL else 'NOT set'}")
+print(f"DEBUG: SUPABASE_SERVICE_KEY is {'set' if SUPABASE_SERVICE_KEY else 'NOT set'}")
+
+if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
+    print("ERROR: SUPABASE_URL or SUPABASE_SERVICE_KEY missing!")
+else:
+    print(f"DEBUG: SUPABASE_SERVICE_KEY first 10 chars: {SUPABASE_SERVICE_KEY[:10]}...")
 
 supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
