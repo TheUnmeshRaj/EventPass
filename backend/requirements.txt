@@ -1,12 +1,13 @@
 Flask==3.0.0
 Flask-CORS==4.0.0
-deepface>=0.0.90
+deepface>=0.0.96
 tf-keras
 opencv-python-headless==4.8.1.78
 numpy<2.0.0
 Pillow>=10.0.1
 gunicorn==21.2.0
-supabase==2.3.0
+supabase==2.13.0
+httpx==0.27.2
 python-dotenv==1.0.0
 setuptools
 wheel

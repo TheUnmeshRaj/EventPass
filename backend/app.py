@@ -14,15 +14,8 @@ load_dotenv()
 SUPABASE_URL = os.getenv("SUPABASE_URL") or os.getenv("NEXT_PUBLIC_SUPABASE_URL")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("NEXT_PUBLIC_SUPABASE_SERVICE_KEY")
 
-print(f"DEBUG: SUPABASE_URL is {'set' if SUPABASE_URL else 'NOT set'}")
-print(f"DEBUG: SUPABASE_SERVICE_KEY is {'set' if SUPABASE_SERVICE_KEY else 'NOT set'}")
-
-if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
-    print("ERROR: SUPABASE_URL or SUPABASE_SERVICE_KEY missing!")
-elif SUPABASE_SERVICE_KEY.startswith("sb_publish"):
-    print("CRITICAL WARNING: SUPABASE_SERVICE_KEY appears to be a PUBLIC (anon) key! Backend requires the service_role key.")
-else:
-    print(f"DEBUG: SUPABASE_SERVICE_KEY first 10 chars: {SUPABASE_SERVICE_KEY[:10]}...")
+FACE_MODEL = "Facenet512"
+MATCH_THRESHOLD = 70 
 
 supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
