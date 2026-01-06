@@ -147,7 +147,7 @@ if (imageFile && authUser?.id) {
         image: imageBase64,
       }),
     });
-
+console.log('Enrollment response status:', res.status)
     const data = await res.json();
 
     if (!res.ok) {
