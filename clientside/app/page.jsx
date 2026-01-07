@@ -671,8 +671,8 @@ function SatyaTicketingApp({ authUser }) {
 
       {/* Purchase Confirmation Modal */}
       {selectedEvent && user.verified && view !== 'scanner' && (
-        <div className="fixed bottom-6 right-6 z-40">
-          <div className="bg-slate-900 text-white p-4 rounded-xl shadow-2xl max-w-sm border border-slate-700">
+        <div className="fixed inset-x-4 bottom-4 md:inset-auto md:right-6 md:bottom-6 z-40">
+          <div className="bg-slate-900 text-white p-4 rounded-xl shadow-2xl max-w-md w-full border border-slate-700 mx-auto md:mx-0">
             <div className="flex justify-between items-start mb-2">
               <h4 className="font-bold text-emerald-400">Confirm Purchase</h4>
               <button
@@ -699,7 +699,7 @@ function SatyaTicketingApp({ authUser }) {
 
       {/* Footer */}
       <footer className="relative w-full border-t border-slate-200 bg-white">
-        <div className="w-full px-8 py-6">
+        <div className="w-full px-4 sm:px-8 py-6">
           <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
             {/* Left side - Links */}
             <div className="flex flex-wrap gap-8 text-sm text-slate-600">

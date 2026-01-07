@@ -31,8 +31,8 @@ export function Balance({ balance, setBalance, userId }) {
   };
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <div className="flex justify-between items-center mb-8">
+    <div className="px-4 py-6 sm:px-6 max-w-4xl mx-auto w-full">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
           <Wallet className="text-emerald-600" />
           Account Balance
@@ -53,7 +53,7 @@ export function Balance({ balance, setBalance, userId }) {
           Add Money
         </h3>
 
-        <div className="flex gap-3">
+        <div className="flex flex-col sm:flex-row gap-3">
           <div className="flex items-center gap-2 bg-slate-50 px-4 py-2 rounded-lg border border-slate-200 w-full">
             <IndianRupee size={16} className="text-slate-400" />
             <input
@@ -67,7 +67,7 @@ export function Balance({ balance, setBalance, userId }) {
 
           <button
             onClick={handleAddMoney}
-            className="bg-slate-900 hover:bg-slate-800 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors"
+            className="bg-slate-900 hover:bg-slate-800 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors w-full sm:w-auto"
           >
             Add
           </button>

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Lock, CheckCircle, UserCheck, XCircle, Camera, CameraOff } from 'lucide-react';
 import { Html5Qrcode } from "html5-qrcode";
-import { updateUserProfile, getUserProfile,getEventById, subscribeToUserProfile, uploadUserAvatar, getUserAvatarUrl } from '../../lib/supabase/database';
+import { updateUserProfile, getUserProfile, getEventById, subscribeToUserProfile, uploadUserAvatar, getUserAvatarUrl } from '../../lib/supabase/database';
 
 
 export function VenueScanner({
@@ -46,21 +46,58 @@ export function VenueScanner({
     setCameraActive(false);
   };
 
-  useEffect(() => {
-    startCamera();
-    return stopCamera;
-  }, []);
+  // ---------- QR SCANNER (LIVE) ----------
+  const startQrScanner = async () => {
+    try {
+      await stopQrScanner();
+      
+      const scanner = new Html5Qrcode("qr-reader");
+      scannerRef.current = scanner;
 
-  // ---------- QR ----------
+      await scanner.start(
+        { facingMode: "environment" },
+        {
+          fps: 10,
+          qrbox: { width: 250, height: 250 },
+        },
+        async (decodedText) => {
+          // Successfully scanned QR
+          await handleQrResult(decodedText);
+        },
+        (errorMessage) => {
+          // Scanning errors (no QR detected) - can be ignored
+        }
+      );
+    } catch (err) {
+      console.error("Failed to start QR scanner:", err);
+      setCameraError("Failed to start QR scanner");
+    }
+  };
+
   const stopQrScanner = async () => {
     if (!scannerRef.current) return;
     try {
-      await scannerRef.current.stop();
+      if (scannerRef.current.isScanning) {
+        await scannerRef.current.stop();
+      }
       await scannerRef.current.clear();
-    } catch { }
+    } catch (err) {
+      console.error("Error stopping scanner:", err);
+    }
     scannerRef.current = null;
   };
 
+  useEffect(() => {
+    if (mode === "qr") {
+      startQrScanner();
+    }
+    return () => {
+      stopQrScanner();
+      stopCamera();
+    };
+  }, [mode]);
+
+  // ---------- QR PARSING & VALIDATION ----------
   const parseQrPayload = (decodedText) => {
     try {
       let data = JSON.parse(decodedText);
@@ -72,87 +109,95 @@ export function VenueScanner({
   };
 
   const handleQrResult = async (decodedText) => {
+    if (processing) return; // Prevent multiple scans
+    
     setProcessing(true);
+    await stopQrScanner(); // Stop scanning immediately after successful read
 
     const parsed = parseQrPayload(decodedText);
+    
+    // Invalid QR format
     if (!parsed?.user_id || !parsed?.event_id) {
-      setScanResult("EmptyQR");
+      setScanResult("notQR");
       setProcessing(false);
       return;
     }
 
-    const valid = myTickets.some(
+    // Check if this ticket exists in myTickets
+    const matchingTicket = myTickets.find(
       t => t.owner_id === parsed.user_id && t.event_id === parsed.event_id
     );
 
-    if (!valid && t.owner_id != parsed.user_id) {
-      setScanResult("invalidUserID");
+    if (!matchingTicket) {
+      // Check if it's wrong user or wrong event
+      const hasEventId = myTickets.some(t => t.event_id === parsed.event_id);
+      const hasUserId = myTickets.some(t => t.owner_id === parsed.user_id);
+      
+      if (!hasUserId && !hasEventId) {
+        setScanResult("invalidTicket");
+      } else if (!hasUserId) {
+        setScanResult("invalidUserID");
+      } else if (!hasEventId) {
+        setScanResult("invalidEventID");
+      }
       setProcessing(false);
       return;
     }
 
-    if (!valid && t.event_id === parsed.event_id) {
-      setScanResult("invalidEventID");
-      setProcessing(false);
-      return;
-    }
-
-
-    await stopQrScanner();
+    // Valid QR - store data and proceed
     setQrData(parsed);
-    setScanResult("valid");
+    setScanResult("validQR");
 
-    setMode("face");
-    await startCamera();
-
-    setShowQrOverlay(true);
-
-    // fetch username
+    // Fetch username
     try {
       const profile = await getUserProfile(parsed.user_id);
-      setUsername(profile?.full_name);
+      setUsername(profile?.full_name || "Guest");
     } catch (err) {
       console.error("Failed to fetch user profile", err);
-      setUsername("Guest");      
+      setUsername("Guest");
     }
 
-    // fetch event name
-
-    try{
-      const eventData = await getEventById (parsed.event_id);
-      setEventname(eventData?.title);
-    }catch(err){
+    // Fetch event name
+    try {
+      const eventData = await getEventById(parsed.event_id);
+      setEventname(eventData?.title || "Event");
+    } catch (err) {
       console.error("Failed to fetch event data", err);
-      setEventname("event");
+      setEventname("Event");
     }
 
-    
-    // delay before face scan
+    // Show QR verified overlay
+    setShowQrOverlay(true);
+
+    // Wait 2 seconds, then switch to face mode
     setTimeout(async () => {
       setShowQrOverlay(false);
       setMode("face");
       await startCamera();
-    }, 1000);
-
-    setProcessing(false);
-
+      setProcessing(false);
+    }, 2000);
   };
 
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
+    setProcessing(true);
+    await stopQrScanner();
+
     try {
-      await stopQrScanner();
       const imageScanner = new Html5Qrcode("qr-reader");
       const decodedText = await imageScanner.scanFile(file, true);
-      await handleQrResult(decodedText);
       await imageScanner.clear();
-    } catch {
-      setScanResult("EmptyQR");
-    };
-  }
-  // ---------- FACE ----------
+      await handleQrResult(decodedText);
+    } catch (err) {
+      console.error("QR scan from file failed:", err);
+      setScanResult("notQR");
+      setProcessing(false);
+    }
+  };
+
+  // ---------- FACE VERIFICATION ----------
   const captureFace = async () => {
     if (!qrData || !videoRef.current) return;
 
@@ -177,116 +222,199 @@ export function VenueScanner({
 
       const data = await res.json();
       console.log("Face verification response:", data);
-      setScanResult(data.match ? "verified" : "invalid");
-    } catch {
-      setScanResult("invalid");
+
+      if (data.match) {
+        setScanResult("verified");
+      } else if (data.no_face_detected) {
+        setScanResult("noFaceDetected");
+      } else {
+        setScanResult("invalidFace");
+      }
+    } catch (err) {
+      console.error("Face verification error:", err);
+      setScanResult("invalidFace");
     }
 
     setProcessing(false);
   };
 
+  // ---------- RESET FUNCTION ----------
+  const resetScanner = async () => {
+    setScanResult(null);
+    setQrData(null);
+    setUsername(null);
+    setEventname(null);
+    setShowQrOverlay(false);
+    setMode("qr");
+    stopCamera();
+    await startQrScanner();
+  };
+
+  // ---------- RENDER OVERLAYS ----------
+  const renderOverlay = () => {
+    if (showQrOverlay && scanResult === "validQR") {
+      return (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-emerald-600/95 text-white z-40 text-center px-6">
+          <CheckCircle size={56} className="mb-3" />
+          <h2 className="text-2xl font-bold">QR VERIFIED</h2>
+          <p className="text-lg mt-1">Welcome, {username}</p>
+          <p className="text-sm mt-1 opacity-80">Preparing face verification...</p>
+        </div>
+      );
+    }
+
+    if (scanResult === "verified") {
+      return (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-emerald-500/95 text-white z-40 text-center px-6">
+          <CheckCircle size={64} />
+          <h2 className="text-2xl font-bold mt-2">FACE VERIFIED</h2>
+          <p className="text-lg mt-1">Enjoy the {eventname}, {username?.split(" ")[0]}!</p>
+          <p className="text-sm mt-1 opacity-80">Access granted ✓</p>
+        </div>
+      );
+    }
+
+    if (scanResult === "invalidFace") {
+      return (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-600/95 text-white z-40 text-center px-6">
+          <XCircle size={64} />
+          <h2 className="text-2xl font-bold mt-2">FACE MISMATCH</h2>
+          <p className="text-lg mt-1">This face doesn't match the ticket owner</p>
+          <p className="text-sm mt-1 opacity-80">Please try again or contact support</p>
+        </div>
+      );
+    }
+
+    if (scanResult === "noFaceDetected") {
+      return (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-amber-600/95 text-white z-40 text-center px-6">
+          <XCircle size={64} />
+          <h2 className="text-2xl font-bold mt-2">NO FACE DETECTED</h2>
+          <p className="text-lg mt-1">Please position your face clearly in the camera</p>
+          <p className="text-sm mt-1 opacity-80">Ensure good lighting and face the camera</p>
+        </div>
+      );
+    }
+
+    if (scanResult === "notQR") {
+      return (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-600/95 text-white z-40 text-center px-6">
+          <XCircle size={64} />
+          <h2 className="text-2xl font-bold mt-2">INVALID QR CODE</h2>
+          <p className="text-lg mt-1">This is not a valid ticket QR code</p>
+          <p className="text-sm mt-1 opacity-80">Please scan a valid ticket</p>
+        </div>
+      );
+    }
+
+    if (scanResult === "invalidUserID") {
+      return (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-600/95 text-white z-40 text-center px-6">
+          <XCircle size={64} />
+          <h2 className="text-2xl font-bold mt-2">INVALID USER</h2>
+          <p className="text-lg mt-1">This ticket belongs to a different user</p>
+          <p className="text-sm mt-1 opacity-80">User ID does not match any valid tickets</p>
+        </div>
+      );
+    }
+
+    if (scanResult === "invalidEventID") {
+      return (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-600/95 text-white z-40 text-center px-6">
+          <XCircle size={64} />
+          <h2 className="text-2xl font-bold mt-2">WRONG EVENT</h2>
+          <p className="text-lg mt-1">This ticket is for a different event</p>
+          <p className="text-sm mt-1 opacity-80">Event ID does not match</p>
+        </div>
+      );
+    }
+
+    if (scanResult === "invalidTicket") {
+      return (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-600/95 text-white z-40 text-center px-6">
+          <XCircle size={64} />
+          <h2 className="text-2xl font-bold mt-2">INVALID TICKET</h2>
+          <p className="text-lg mt-1">This ticket is not valid for this venue</p>
+          <p className="text-sm mt-1 opacity-80">No matching ticket found</p>
+        </div>
+      );
+    }
+
+    return null;
+  };
+
   return (
-    <div className="flex flex-col h-[calc(100vh-70px)] bg-black">
-      <div className="flex-1 flex items-center justify-center gap-8 p-6">
-
+    <div className="min-h-[calc(100vh-64px)] bg-slate-950 text-white px-4 py-6">
+      <div className="w-full max-w-6xl mx-auto flex flex-col lg:flex-row gap-6 lg:gap-10 items-stretch">
+        
         {/* LEFT: CAMERA / SCANNER */}
-        <div className="relative w-full max-w-2xl h-96 bg-black rounded-3xl overflow-hidden border-2 border-slate-800 shadow-xl">
+        <div className="relative flex-1 min-h-[320px] sm:min-h-[420px] lg:min-h-[520px] rounded-3xl border border-slate-800 bg-black/70 overflow-hidden shadow-2xl">
 
+          {/* QR SCANNER */}
           {mode === "qr" && (
-
-            <div id="qr-reader" className="w-full h-full" />
+            <div id="qr-reader" className="absolute inset-0" />
           )}
 
+          {/* FACE CAMERA */}
           {mode === "face" && (
             <video
               ref={videoRef}
               autoPlay
               playsInline
-              className="w-full h-full object-cover"
+              className="absolute inset-0 w-full h-full object-cover"
             />
           )}
 
-          {showQrOverlay && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-emerald-600/90 text-white z-40">
-              <CheckCircle size={64} />
-              <h2 className="text-2xl font-bold mt-2">QR VERIFIED</h2>
-              <p className="text-lg mt-1">Welcome, {username}</p>
-            </div>
-          )}
-
-
           <canvas ref={canvasRef} className="hidden" />
 
-          {/* PROCESSING */}
-          {processing && (
+          {/* OVERLAYS */}
+          {renderOverlay()}
+
+          {/* PROCESSING SPINNER */}
+          {processing && !showQrOverlay && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/60 z-30">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500" />
             </div>
           )}
 
-          {/* RESULTS */}
-          {scanResult === "verified" && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-emerald-500/90 text-white z-40">
-              <CheckCircle size={64} />
-              <h2 className="text-2xl font-bold align-middle justify-center-safe">FACE VERIFIED</h2>
-              <p className="text-lg mt-1">Enjoy the {eventname}, {username?.split(" ")[0]}!</p>
-            </div>
-          )}
-
-          {scanResult === "invalid" && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-600/90 text-white z-40">
-              <XCircle size={64} />
-              <h2 className="text-2xl font-bold">VERIFICATION FAILED, try again!</h2>
-            </div>
-          )}
-          {scanResult === "EmptyQR" && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-600/90 text-white z-40">
-              <XCircle size={64} />
-              <h2 className="text-2xl font-bold">QR code is invalid!</h2>
-            </div>
-          )}
-          {scanResult === "invalidUserID" && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-600/90 text-white z-40">
-              <XCircle size={64} />
-              <h2 className="text-2xl font-bold">User ID is invalid</h2>
-            </div>
-          )}
-          {scanResult === "invalidEventID" && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-600/90 text-white z-40">
-              <XCircle size={64} />
-              <h2 className="text-2xl font-bold">Event ID is invalid</h2>
+          {/* SCANNING INDICATOR */}
+          {mode === "qr" && !scanResult && !processing && (
+            <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-slate-900/80 text-white px-4 py-2 rounded-full text-sm">
+              📷 Scanning for QR code...
             </div>
           )}
         </div>
 
         {/* RIGHT: CONTROLS */}
-        <div className="flex flex-col gap-6 h-96 justify-start w-72">
+        <div className="w-full lg:w-72 bg-slate-900/70 border border-slate-800 rounded-3xl p-4 sm:p-6 flex flex-col gap-4 shadow-xl">
 
+          {/* MODE INDICATOR */}
           <div>
-            <h3 className="flex items-center gap-2 font-bold text-white mb-2">
-              <Lock size={16} className="text-emerald-500" />
-              {mode === "qr" ? "QR Scanner" : "Face Scanner"}
+            <h3 className="flex items-center gap-2 font-bold text-white mb-1 text-base">
+              <Lock size={18} className="text-emerald-500" />
+              {mode === "qr" ? "QR Scanner" : "Face Verification"}
             </h3>
             <p className="text-xs text-slate-400">
               {mode === "qr"
-                ? "Scan QR to verify ticket"
+                ? "Point the device camera at the QR or upload an image."
                 : `Face verification for ${username ?? "user"}`}
             </p>
           </div>
 
-          {/* QR STATUS */}
-          {mode === "qr" && scanResult === "valid" && (
-            <div className="bg-emerald-700 p-3 rounded text-sm">
+          {/* QR VERIFIED STATUS */}
+          {mode === "qr" && scanResult === "validQR" && (
+            <div className="bg-emerald-600/20 border border-emerald-500/40 text-sm text-emerald-100 px-4 py-3 rounded-2xl">
               QR verified for user {qrData?.user_id}
             </div>
           )}
 
-          {/* UPLOAD QR */}
-          {mode === "qr" && (
+          {/* UPLOAD QR IMAGE BUTTON */}
+          {mode === "qr" && !scanResult && (
             <>
               <button
                 onClick={() => fileInputRef.current.click()}
-                className="rounded-2xl bg-slate-800 hover:bg-slate-700 p-6 text-white"
+                disabled={processing}
+                className="rounded-2xl bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-3 text-sm font-semibold transition"
               >
                 Upload QR Image
               </button>
@@ -301,34 +429,37 @@ export function VenueScanner({
             </>
           )}
 
-          {/* FACE CAPTURE */}
-          {mode === "face" && scanResult === "valid" && (
+          {/* CAPTURE FACE BUTTON */}
+          {mode === "face" && scanResult === "validQR" && (
             <button
               onClick={captureFace}
               disabled={processing}
-              className="rounded-2xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 p-6 text-white flex items-center justify-center gap-2"
+              className="rounded-2xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-3 text-sm font-semibold flex items-center justify-center gap-2 transition"
             >
               <Camera />
               Capture Face
             </button>
           )}
 
-          {/* RESET */}
+          {/* RESET BUTTON */}
           {scanResult && (
             <button
-              onClick={() => {
-                setScanResult(null);
-                setMode("qr");
-                setQrData(null);
-              }}
-              className="text-sm text-slate-400 underline"
+              onClick={resetScanner}
+              className="text-sm text-slate-400 underline mt-2 text-left"
             >
               Reset
             </button>
+          )}
+
+          {/* STATUS INFO */}
+          {qrData && (
+            <div className="bg-slate-800/50 border border-slate-700 p-3 rounded-2xl text-xs text-slate-300 space-y-1">
+              <div><span className="font-semibold">User:</span> {username}</div>
+              <div><span className="font-semibold">Event:</span> {eventname}</div>
+            </div>
           )}
         </div>
       </div>
     </div>
   );
-
 }

@@ -107,12 +107,12 @@ export function AdminDashboard() {
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
-      <div className="flex justify-between items-center mb-8">
+    <div className="px-4 py-6 sm:px-6 max-w-6xl mx-auto w-full">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-8">
         <h2 className="text-3xl font-bold text-slate-800">Event Management</h2>
         <button
           onClick={() => setShowForm(!showForm)}
-          className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+          className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium transition-colors w-full md:w-auto"
         >
           <Plus size={20} /> Add New Event
         </button>
@@ -130,7 +130,7 @@ export function AdminDashboard() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-bold text-slate-700 mb-2">Event Title *</label>
                   <input
@@ -235,7 +235,7 @@ export function AdminDashboard() {
                 </div>
               )}
 
-              <div className="flex gap-3 pt-4 border-t border-slate-200">
+              <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-slate-200">
                 <button
                   type="submit"
                   disabled={saving}

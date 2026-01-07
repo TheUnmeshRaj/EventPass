@@ -3,7 +3,7 @@ import { Fingerprint, ShieldCheck, CheckCircle } from 'lucide-react';
 export function IdentityVerification({ isScanningFace, user, scanProgress, handleVerifyIdentity, selectedEvent, buyTicket, processing }) {
   return (
     <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl">
+      <div className="bg-white rounded-2xl max-w-md w-full p-4 sm:p-6 shadow-2xl">
         {!isScanningFace && !user.verified ? (
           <>
             <div className="text-center mb-6">
@@ -25,7 +25,7 @@ export function IdentityVerification({ isScanningFace, user, scanProgress, handl
               </div>
             </div>
 
-            <button onClick={handleVerifyIdentity} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-bold transition-colors flex items-center justify-center gap-2">
+            <button onClick={handleVerifyIdentity} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-bold transition-colors flex items-center justify-center gap-2 text-sm">
               <Fingerprint size={20} /> Scan Biometrics to Verify
             </button>
           </>
@@ -57,18 +57,18 @@ export function IdentityVerification({ isScanningFace, user, scanProgress, handl
             {/* <button onClick={() => { if (selectedEvent) buyTicket(selectedEvent); }} className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold">{processing ? "Minting Ticket..." : `Confirm Purchase (₹${selectedEvent?.price})`}</button> */}
 
             <button
-  disabled={processing}
-  onClick={() => {
-    if (!processing && selectedEvent) {
-      buyTicket(selectedEvent);
-    }
-  }}
-  className={`w-full py-3 rounded-xl font-bold ${
-    processing ? "bg-slate-400 cursor-not-allowed" : "bg-slate-900 text-white"
-  }`}
->
-  {processing ? "Minting Ticket..." : `Confirm Purchase (₹${selectedEvent?.price})`}
-</button>
+              disabled={processing}
+              onClick={() => {
+                if (!processing && selectedEvent) {
+                  buyTicket(selectedEvent);
+                }
+              }}
+              className={`w-full py-3 rounded-xl font-bold text-sm ${
+                processing ? "bg-slate-400 cursor-not-allowed" : "bg-slate-900 text-white"
+              }`}
+            >
+              {processing ? "Minting Ticket..." : `Confirm Purchase (₹${selectedEvent?.price})`}
+            </button>
 
 
           </div>

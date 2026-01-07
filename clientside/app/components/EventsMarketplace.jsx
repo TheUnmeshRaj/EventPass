@@ -36,17 +36,17 @@ export function EventsMarketplace({ setSelectedEvent }) {
     event.category.toLowerCase().includes(searchTerm.toLowerCase())
   );
   return (
-    <div className="p-6 max-w-6xl mx-auto">
-      <div className="flex justify-between items-center mb-8">
+    <div className="px-4 py-6 sm:px-6 max-w-6xl mx-auto w-full">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
         <h2 className="text-2xl font-bold text-slate-800">Upcoming Events</h2>
-        <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-lg shadow-sm border border-slate-200">
+        <div className="flex items-center gap-2 bg-white px-3 sm:px-4 py-2 rounded-lg shadow-sm border border-slate-200 w-full md:w-auto">
           <Search size={18} className="text-slate-400" />
           <input
             type="text"
             placeholder="Search events..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="outline-none text-sm w-48"
+            className="outline-none text-sm w-full md:w-56"
           />
         </div>
       </div>
@@ -58,7 +58,7 @@ export function EventsMarketplace({ setSelectedEvent }) {
           <p className="text-slate-500">No events found. Try adjusting your search.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
           {filteredEvents.map(event => (
             <div key={event.id} className="bg-white rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-shadow duration-300 border border-slate-100">
               <div className="h-48 overflow-hidden relative">
@@ -73,13 +73,13 @@ export function EventsMarketplace({ setSelectedEvent }) {
                 <div className="flex items-center gap-2 text-slate-500 text-sm mb-4">
                   <Calendar size={14} /> {new Date(event.date).toLocaleDateString()}
                 </div>
-                <div className="flex justify-between items-center border-t pt-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-t pt-4">
                   <div className="font-bold text-lg text-emerald-700 flex items-center">
                     <IndianRupee size={16} /> {event.price}
                   </div>
                   <button
                     onClick={() => setSelectedEvent(event)}
-                    className="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                    className="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors w-full sm:w-auto"
                   >
                     Book Now
                   </button>

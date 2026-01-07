@@ -84,7 +84,7 @@ export default function LoginPage() {
       <div className="pointer-events-none absolute -right-40 -bottom-32 h-96 w-96 rounded-full bg-purple-600/25 blur-3xl" />
 
       {/* Top bar with logo + title */}
-      <header className="relative z-10 flex items-center justify-between px-8 pt-8">
+      <header className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between px-4 sm:px-8 pt-8">
         <div className="flex items-center gap-3">
          
 
@@ -109,9 +109,9 @@ export default function LoginPage() {
       </header>
 
       {/* Center layout */}
-      <main className="relative z-10 flex min-h-[calc(100vh-8rem)] items-center justify-center px-4 pb-3 pt-3 overflow-hidden">
+      <main className="relative z-10 flex min-h-[calc(100vh-8rem)] items-center justify-center px-4 pb-8 pt-6 overflow-hidden">
         
-        <div className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-10 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] lg:gap-14">
+        <div className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-8 md:gap-10 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] lg:gap-14">
           
 
           {/* Left side content */}
