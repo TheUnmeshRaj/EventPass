@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Lock, CheckCircle, UserCheck, XCircle, Camera, CameraOff } from 'lucide-react';
 import { Html5Qrcode } from "html5-qrcode";
-import { updateUserProfile, getUserProfile, subscribeToUserProfile, uploadUserAvatar, getUserAvatarUrl } from '../../lib/supabase/database';
+import { updateUserProfile, getUserProfile,getEventById, subscribeToUserProfile, uploadUserAvatar, getUserAvatarUrl } from '../../lib/supabase/database';
 
 
 export function VenueScanner({
@@ -23,6 +23,7 @@ export function VenueScanner({
   const [mode, setMode] = useState("qr");
   const [username, setUsername] = useState(null);
   const [showQrOverlay, setShowQrOverlay] = useState(false);
+  const [eventname, setEventname] = useState(null);
 
 
   const startCamera = async () => {
@@ -112,10 +113,20 @@ export function VenueScanner({
       setUsername(profile?.full_name);
     } catch (err) {
       console.error("Failed to fetch user profile", err);
-      setUsername("Guest");
+      setUsername("Guest");      
     }
 
+    // fetch event name
 
+    try{
+      const eventData = await getEventById (parsed.event_id);
+      setEventname(eventData?.title);
+    }catch(err){
+      console.error("Failed to fetch event data", err);
+      setEventname("event");
+    }
+
+    
     // delay before face scan
     setTimeout(async () => {
       setShowQrOverlay(false);
@@ -217,14 +228,15 @@ export function VenueScanner({
           {scanResult === "verified" && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-emerald-500/90 text-white z-40">
               <CheckCircle size={64} />
-              <h2 className="text-2xl font-bold">FACE VERIFIED</h2>
+              <h2 className="text-2xl font-bold align-middle justify-center-safe">FACE VERIFIED</h2>
+              <p className="text-lg mt-1">Enjoy the {eventname}, {username?.split(" ")[0]}!</p>
             </div>
           )}
 
           {scanResult === "invalid" && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-600/90 text-white z-40">
               <XCircle size={64} />
-              <h2 className="text-2xl font-bold">VERIFICATION FAILED</h2>
+              <h2 className="text-2xl font-bold">VERIFICATION FAILED, try again!</h2>
             </div>
           )}
           {scanResult === "EmptyQR" && (
