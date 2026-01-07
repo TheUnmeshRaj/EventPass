@@ -97,12 +97,58 @@ export function UserDashboard({ authUser }) {
     }));
   };
 
-  const handleImageChange = (e) => {
+  const convertJpegToPng = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          try {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.naturalWidth || img.width;
+            canvas.height = img.naturalHeight || img.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            canvas.toBlob((blob) => {
+              if (!blob) return reject(new Error('Conversion to PNG failed'));
+              const fileName = file.name.replace(/\.jpe?g$/i, '.png');
+              const pngFile = new File([blob], fileName, { type: 'image/png' });
+              resolve(pngFile);
+            }, 'image/png');
+          } catch (err) {
+            reject(err);
+          }
+        };
+        img.onerror = (err) => reject(err);
+        img.src = reader.result;
+      };
+      reader.onerror = (err) => reject(err);
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleImageChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setImageFile(file);
-    setPreview(URL.createObjectURL(file));
+    let selectedFile = file;
+
+    const isJpeg = file.type === 'image/jpeg' || /\.jpe?g$/i.test(file.name);
+    if (isJpeg) {
+      try {
+        selectedFile = await convertJpegToPng(file);
+      } catch (err) {
+        console.error('Failed to convert JPEG to PNG:', err);
+        setMessage({ type: 'error', text: 'Failed to convert JPEG image to PNG. Please try another image.' });
+        return;
+      }
+    }
+
+    setImageFile(selectedFile);
+    if (preview) {
+      try { URL.revokeObjectURL(preview); } catch (e) {}
+    }
+    setPreview(URL.createObjectURL(selectedFile));
   };
   const fileToBase64 = (file) => {
   return new Promise((resolve, reject) => {
