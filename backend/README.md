@@ -1,1 +1,10 @@
-users will get custom mesage in for reset,signin etc
+---
+title: Eventpass
+emoji: 🏢
+colorFrom: pink
+colorTo: yellow
+sdk: docker
+pinned: false
+---
+
+Check out the configuration reference at https://huggingface.co/docs/hub/spaces-config-reference
