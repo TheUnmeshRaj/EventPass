@@ -6,7 +6,7 @@ import { QRCodeCanvas } from "qrcode.react";
 export function MyTickets({ myTickets, resellTicket, setView, userId }) {
   useEffect(() => {
     if (!userId) return;
-    
+
     const subscription = subscribeToUserTickets(userId, (payload) => {
       if (payload.eventType === 'INSERT') {
       } else if (payload.eventType === 'UPDATE') {
@@ -57,17 +57,18 @@ export function MyTickets({ myTickets, resellTicket, setView, userId }) {
               </div>
               <div className="md:w-2/3 p-6 flex flex-col md:flex-row items-center justify-between gap-6">
                 <div className="flex flex-col items-center w-full md:w-auto">
-                  <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-inner w-full max-w-[220px]">
+                  <div className="bg-white p-1 rounded-lg border border-slate-200 shadow-inner w-fit">
                     <QRCodeCanvas
                       value={JSON.stringify({
                         user_id: userId,
-                        event_id: ticket.event_id
+                        event_id: ticket.event_id,
                       })}
                       size={qrSize}
                       level="H"
                       includeMargin={true}
                     />
                   </div>
+
                   <div className="text-xs font-mono text-slate-400 mt-2 text-center break-all">
                     {ticket.ticket_id}
                   </div>

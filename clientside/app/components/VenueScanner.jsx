@@ -50,6 +50,7 @@ export function VenueScanner({
   const startQrScanner = async () => {
     try {
       await stopQrScanner();
+      stopCamera();
       
       const scanner = new Html5Qrcode("qr-reader");
       scannerRef.current = scanner;
@@ -347,15 +348,17 @@ export function VenueScanner({
     <div className="min-h-[calc(100vh-64px)] bg-slate-950 text-white px-4 py-6">
       <div className="w-full max-w-6xl mx-auto flex flex-col lg:flex-row gap-6 lg:gap-10 items-stretch">
         
-        {/* LEFT: CAMERA / SCANNER */}
         <div className="relative flex-1 min-h-[320px] sm:min-h-[420px] lg:min-h-[520px] rounded-3xl border border-slate-800 bg-black/70 overflow-hidden shadow-2xl">
 
-          {/* QR SCANNER */}
           {mode === "qr" && (
-            <div id="qr-reader" className="absolute inset-0" />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div
+                id="qr-reader"
+                className="w-[300px] h-[300px] max-w-full max-h-full rounded-3xl border-2 border-emerald-500/80 bg-black/80 overflow-hidden shadow-[0_0_40px_rgba(16,185,129,0.35)]"
+              />
+            </div>
           )}
 
-          {/* FACE CAMERA */}
           {mode === "face" && (
             <video
               ref={videoRef}
@@ -367,17 +370,14 @@ export function VenueScanner({
 
           <canvas ref={canvasRef} className="hidden" />
 
-          {/* OVERLAYS */}
           {renderOverlay()}
 
-          {/* PROCESSING SPINNER */}
           {processing && !showQrOverlay && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/60 z-30">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500" />
             </div>
           )}
 
-          {/* SCANNING INDICATOR */}
           {mode === "qr" && !scanResult && !processing && (
             <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-slate-900/80 text-white px-4 py-2 rounded-full text-sm">
               📷 Scanning for QR code...
@@ -385,10 +385,8 @@ export function VenueScanner({
           )}
         </div>
 
-        {/* RIGHT: CONTROLS */}
         <div className="w-full lg:w-72 bg-slate-900/70 border border-slate-800 rounded-3xl p-4 sm:p-6 flex flex-col gap-4 shadow-xl">
 
-          {/* MODE INDICATOR */}
           <div>
             <h3 className="flex items-center gap-2 font-bold text-white mb-1 text-base">
               <Lock size={18} className="text-emerald-500" />
@@ -401,14 +399,12 @@ export function VenueScanner({
             </p>
           </div>
 
-          {/* QR VERIFIED STATUS */}
           {mode === "qr" && scanResult === "validQR" && (
             <div className="bg-emerald-600/20 border border-emerald-500/40 text-sm text-emerald-100 px-4 py-3 rounded-2xl">
-              QR verified for user {qrData?.user_id}
+              QR verified for {username}
             </div>
           )}
 
-          {/* UPLOAD QR IMAGE BUTTON */}
           {mode === "qr" && !scanResult && (
             <>
               <button
@@ -429,7 +425,6 @@ export function VenueScanner({
             </>
           )}
 
-          {/* CAPTURE FACE BUTTON */}
           {mode === "face" && scanResult === "validQR" && (
             <button
               onClick={captureFace}
@@ -441,7 +436,6 @@ export function VenueScanner({
             </button>
           )}
 
-          {/* RESET BUTTON */}
           {scanResult && (
             <button
               onClick={resetScanner}
@@ -451,7 +445,6 @@ export function VenueScanner({
             </button>
           )}
 
-          {/* STATUS INFO */}
           {qrData && (
             <div className="bg-slate-800/50 border border-slate-700 p-3 rounded-2xl text-xs text-slate-300 space-y-1">
               <div><span className="font-semibold">User:</span> {username}</div>
@@ -460,6 +453,18 @@ export function VenueScanner({
           )}
         </div>
       </div>
+      <style jsx global>{`
+        #qr-reader__dashboard_section_csr,
+        #qr-reader__dashboard_section_swaplink,
+        #qr-reader__dashboard_section {
+          display: none !important;
+        }
+        #qr-reader video {
+          width: 100% !important;
+          height: 100% !important;
+          object-fit: cover;
+        }
+      `}</style>
     </div>
   );
 }
