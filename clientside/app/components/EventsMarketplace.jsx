@@ -8,7 +8,7 @@ export function EventsMarketplace({ setSelectedEvent }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [priceSort, setPriceSort] = useState('default'); 
-  const [segment, setSegment] = useState('all'); 
+  const [segment, setSegment] = useState('upcoming'); 
   const [upcomingBucket, setUpcomingBucket] = useState('all'); 
 
   useEffect(() => {
@@ -89,12 +89,12 @@ export function EventsMarketplace({ setSelectedEvent }) {
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <label className="text-sm text-slate-600">Category</label>
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
-              className="border rounded px-3 py-2 text-sm"
+              className="border rounded px-3 py-2 text-sm w-full sm:w-auto min-w-[120px]"
             >
               <option>All</option>
               {[...new Set(events.map(ev => ev.category))].filter(Boolean).map(cat => (
@@ -106,7 +106,7 @@ export function EventsMarketplace({ setSelectedEvent }) {
             <select
               value={priceSort}
               onChange={(e) => setPriceSort(e.target.value)}
-              className="border rounded px-3 py-2 text-sm"
+              className="border rounded px-3 py-2 text-sm w-full sm:w-auto min-w-[120px]"
             >
               <option value="default">Default</option>
               <option value="asc">Price: Low → High</option>
@@ -115,16 +115,16 @@ export function EventsMarketplace({ setSelectedEvent }) {
           </div>
 
           <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-            <div className="flex items-center gap-2">
-              <button onClick={() => { setSegment('all'); setUpcomingBucket('all'); }} className={`px-3 py-1 rounded ${segment==='all' ? 'bg-slate-900 text-white' : 'bg-white border'}`}>All</button>
-              <button onClick={() => { setSegment('past'); setUpcomingBucket('all'); }} className={`px-3 py-1 rounded ${segment==='past' ? 'bg-slate-900 text-white' : 'bg-white border'}`}>Past</button>
-              <button onClick={() => { setSegment('current'); setUpcomingBucket('all'); }} className={`px-3 py-1 rounded ${segment==='current' ? 'bg-slate-900 text-white' : 'bg-white border'}`}>Today</button>
-              <button onClick={() => { setSegment('upcoming'); setUpcomingBucket('all'); }} className={`px-3 py-1 rounded ${segment==='upcoming' ? 'bg-slate-900 text-white' : 'bg-white border'}`}>Upcoming</button>
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              <button onClick={() => { setSegment('all'); setUpcomingBucket('all'); }} className={`px-3 py-1 rounded flex-shrink-0 ${segment==='all' ? 'bg-slate-900 text-white' : 'bg-white border'}`}>All</button>
+              <button onClick={() => { setSegment('past'); setUpcomingBucket('all'); }} className={`px-3 py-1 rounded flex-shrink-0 ${segment==='past' ? 'bg-slate-900 text-white' : 'bg-white border'}`}>Past</button>
+              <button onClick={() => { setSegment('current'); setUpcomingBucket('all'); }} className={`px-3 py-1 rounded flex-shrink-0 ${segment==='current' ? 'bg-slate-900 text-white' : 'bg-white border'}`}>Today</button>
+              <button onClick={() => { setSegment('upcoming'); setUpcomingBucket('all'); }} className={`px-3 py-1 rounded flex-shrink-0 ${segment==='upcoming' ? 'bg-slate-900 text-white' : 'bg-white border'}`}>Upcoming</button>
             </div>
 
             {segment === 'upcoming' && (
               <div className="flex items-center gap-2">
-                <select value={upcomingBucket} onChange={(e) => setUpcomingBucket(e.target.value)} className="border rounded px-3 py-2 text-sm">
+                <select value={upcomingBucket} onChange={(e) => setUpcomingBucket(e.target.value)} className="border rounded px-3 py-2 text-sm w-full sm:w-auto min-w-[160px]">
                   <option value="all">All upcoming</option>
                   <option value="month">Coming in 1 month</option>
                   <option value="months">Coming in a few months</option>
@@ -144,10 +144,10 @@ export function EventsMarketplace({ setSelectedEvent }) {
           <p className="text-slate-500">No events found. Try adjusting your search.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredEvents.map(event => (
             <div key={event.id} className="bg-white rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-shadow duration-300 border border-slate-100">
-              <div className="h-48 overflow-hidden relative">
+              <div className="h-40 sm:h-48 overflow-hidden relative">
                 <img src={event.image} alt={event.title} className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" />
                 <div className="absolute top-3 right-3 bg-slate-900/80 text-white text-xs px-2 py-1 rounded backdrop-blur-sm">{event.category}</div>
               </div>
