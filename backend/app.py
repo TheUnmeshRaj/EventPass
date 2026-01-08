@@ -19,7 +19,48 @@ SIMILARITY_THRESHOLD = 0.35  # tune this
 # ----------------------------------------
 
 def cosine_similarity(a, b):
-    return np.dot(a, b) / (norm(a) * norm(b))
+    denom = norm(a) * norm(b)
+    if denom == 0:
+        return 0.0
+    return float(np.dot(a, b) / denom)
+
+
+def extract_embedding(represent_output):
+    if represent_output is None:
+        return None
+
+    if isinstance(represent_output, dict):
+        emb = represent_output.get("embedding")
+        if emb is None:
+            return None
+        arr = np.asarray(emb, dtype=np.float32)
+        return arr if arr.ndim == 1 and arr.size > 0 else None
+
+    if isinstance(represent_output, (list, tuple)):
+        if len(represent_output) == 0:
+            return None
+
+        first = represent_output[0]
+        if isinstance(first, (float, int, np.floating, np.integer)):
+            arr = np.asarray(represent_output, dtype=np.float32)
+            return arr if arr.ndim == 1 and arr.size > 0 else None
+
+        if isinstance(first, dict):
+            emb = first.get("embedding")
+            if emb is None:
+                return None
+            arr = np.asarray(emb, dtype=np.float32)
+            return arr if arr.ndim == 1 and arr.size > 0 else None
+
+        if isinstance(first, (list, tuple, np.ndarray)):
+            arr = np.asarray(first, dtype=np.float32)
+            return arr if arr.ndim == 1 and arr.size > 0 else None
+
+    try:
+        arr = np.asarray(represent_output, dtype=np.float32)
+        return arr if arr.ndim == 1 and arr.size > 0 else None
+    except Exception:
+        return None
 
 
 print("Loading model once...")
@@ -31,16 +72,21 @@ dataset_embeddings = []
 
 for filename in os.listdir(DATASET_DIR):
     img_path = os.path.join(DATASET_DIR, filename)
+    if not os.path.isfile(img_path):
+        continue
 
-    emb = DeepFace.represent(
+    embeddings = DeepFace.represent(
         img_path=img_path,
         model_name=MODEL_NAME,
         enforce_detection=False
-    )[0]["embedding"]
+    )
+    emb = extract_embedding(embeddings)
+    if emb is None:
+        continue
 
     dataset_embeddings.append({
         "name": filename,
-        "embedding": np.array(emb)
+        "embedding": emb
     })
 
 print(f"Cached {len(dataset_embeddings)} embeddings")
@@ -66,13 +112,17 @@ def verify_face():
             temp_path = temp.name
 
         # Get embedding of captured face
-        captured_embedding = DeepFace.represent(
+        embeddings = DeepFace.represent(
             img_path=temp_path,
             model_name=MODEL_NAME,
             enforce_detection=False
-        )[0]["embedding"]
+        )
 
-        captured_embedding = np.array(captured_embedding)
+        captured_embedding = extract_embedding(embeddings)
+        os.remove(temp_path)
+
+        if captured_embedding is None:
+            return jsonify(success=True, result="invalid"), 200
 
         best_score = -1
         best_match = None
@@ -82,8 +132,6 @@ def verify_face():
             if score > best_score:
                 best_score = score
                 best_match = item["name"]
-
-        os.remove(temp_path)
 
         if best_score >= SIMILARITY_THRESHOLD:
             return jsonify(
