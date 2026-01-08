@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Search, MapPin, Calendar, IndianRupee } from 'lucide-react';
 import { getAllEvents, subscribeToEvents } from '../../lib/supabase/database';
 
@@ -6,6 +6,10 @@ export function EventsMarketplace({ setSelectedEvent }) {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('All');
+  const [priceSort, setPriceSort] = useState('default'); 
+  const [segment, setSegment] = useState('all'); 
+  const [upcomingBucket, setUpcomingBucket] = useState('all'); 
 
   useEffect(() => {
     const fetchEvents = async () => {
@@ -30,24 +34,106 @@ export function EventsMarketplace({ setSelectedEvent }) {
     };
   }, []);
 
-  const filteredEvents = events.filter(event =>
-    event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    event.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    event.category.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredEvents = useMemo(() => {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    const matchesSearch = (e) =>
+      e.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      e.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      e.category.toLowerCase().includes(searchTerm.toLowerCase());
+
+    const matchesCategory = (e) => categoryFilter === 'All' || e.category === categoryFilter;
+
+    const daysDiff = (date) => Math.ceil((date - startOfToday) / (1000 * 60 * 60 * 24));
+
+    const inSegment = (e) => {
+      const d = new Date(e.date);
+      const diff = daysDiff(d);
+      if (segment === 'all') return true;
+      if (segment === 'past') return diff < 0;
+      if (segment === 'current') return diff === 0;
+      if (segment === 'upcoming') {
+        if (diff <= 0) return false;
+        if (upcomingBucket === 'all') return true;
+        if (upcomingBucket === 'month') return diff <= 30;
+        if (upcomingBucket === 'months') return diff > 30 && diff <= 90;
+        if (upcomingBucket === 'year') return diff > 90 && diff <= 365;
+        if (upcomingBucket === 'later') return diff > 365;
+      }
+      return true;
+    };
+
+    let list = events.filter(e => matchesSearch(e) && matchesCategory(e) && inSegment(e));
+
+    if (priceSort === 'asc') list = list.sort((a, b) => Number(a.price) - Number(b.price));
+    else if (priceSort === 'desc') list = list.sort((a, b) => Number(b.price) - Number(a.price));
+
+    return list;
+  }, [events, searchTerm, categoryFilter, priceSort, segment, upcomingBucket]);
   return (
     <div className="px-4 py-6 sm:px-6 max-w-6xl mx-auto w-full">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
-        <h2 className="text-2xl font-bold text-slate-800">Upcoming Events</h2>
-        <div className="flex items-center gap-2 bg-white px-3 sm:px-4 py-2 rounded-lg shadow-sm border border-slate-200 w-full md:w-auto">
-          <Search size={18} className="text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search events..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="outline-none text-sm w-full md:w-56"
-          />
+      <div className="flex flex-col gap-4 md:gap-6 mb-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-2xl font-bold text-slate-800">Events</h2>
+          <div className="flex items-center gap-2 bg-white px-3 sm:px-4 py-2 rounded-lg shadow-sm border border-slate-200 w-full md:w-auto">
+            <Search size={18} className="text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search events..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="outline-none text-sm w-full md:w-56"
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <label className="text-sm text-slate-600">Category</label>
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="border rounded px-3 py-2 text-sm"
+            >
+              <option>All</option>
+              {[...new Set(events.map(ev => ev.category))].filter(Boolean).map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+
+            <label className="text-sm text-slate-600">Sort</label>
+            <select
+              value={priceSort}
+              onChange={(e) => setPriceSort(e.target.value)}
+              className="border rounded px-3 py-2 text-sm"
+            >
+              <option value="default">Default</option>
+              <option value="asc">Price: Low → High</option>
+              <option value="desc">Price: High → Low</option>
+            </select>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+            <div className="flex items-center gap-2">
+              <button onClick={() => { setSegment('all'); setUpcomingBucket('all'); }} className={`px-3 py-1 rounded ${segment==='all' ? 'bg-slate-900 text-white' : 'bg-white border'}`}>All</button>
+              <button onClick={() => { setSegment('past'); setUpcomingBucket('all'); }} className={`px-3 py-1 rounded ${segment==='past' ? 'bg-slate-900 text-white' : 'bg-white border'}`}>Past</button>
+              <button onClick={() => { setSegment('current'); setUpcomingBucket('all'); }} className={`px-3 py-1 rounded ${segment==='current' ? 'bg-slate-900 text-white' : 'bg-white border'}`}>Today</button>
+              <button onClick={() => { setSegment('upcoming'); setUpcomingBucket('all'); }} className={`px-3 py-1 rounded ${segment==='upcoming' ? 'bg-slate-900 text-white' : 'bg-white border'}`}>Upcoming</button>
+            </div>
+
+            {segment === 'upcoming' && (
+              <div className="flex items-center gap-2">
+                <select value={upcomingBucket} onChange={(e) => setUpcomingBucket(e.target.value)} className="border rounded px-3 py-2 text-sm">
+                  <option value="all">All upcoming</option>
+                  <option value="month">Coming in 1 month</option>
+                  <option value="months">Coming in a few months</option>
+                  <option value="year">Coming within a year</option>
+                  <option value="later">More than a year</option>
+                </select>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

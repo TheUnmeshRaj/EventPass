@@ -13,9 +13,9 @@ EventPass is a modern event ticketing platform that uses **Next.js** for the fro
 ## Tech Stack
 
 - **Frontend**: Next.js 16, Tailwind CSS, Framer Motion
-- **Backend**: Flask, DeepFace, OpenCV, Gunicorn
+- **Backend**: Flask, DeepFace, Gunicorn
 - **Database**: Supabase (PostgreSQL, Auth, Storage)
-- **Deployment**: Vercel (Frontend), Render (Backend)
+- **Deployment**: Vercel (Frontend), HuggingFace (Backend)
 
 ## Getting Started
 
@@ -29,7 +29,7 @@ EventPass is a modern event ticketing platform that uses **Next.js** for the fro
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/Aditya-Ranjan1234/EventPass.git
+   git clone https://github.com/TheUnmeshRaj/EventPass.git
    cd EventPass
    ```
 
@@ -61,9 +61,6 @@ EventPass is a modern event ticketing platform that uses **Next.js** for the fro
    SUPABASE_SERVICE_KEY=your_service_key
    ```
 
-## Deployment
-
-Refer to the detailed [walkthrough.md](./walkthrough.md) for step-by-step instructions on deploying to **Vercel** and **Render**.
 
 ## Authors
 
