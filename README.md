@@ -55,13 +55,25 @@ EventPass is a modern event ticketing platform that uses **Next.js** for the fro
    source venv/bin/activate
    pip install -r requirements.txt
    ```
-   Create a `.env` file in the root or `backend` directory with:
+
+   or what i prefer
+
+   ```bash
+   cd backend
+   conda create -n eventpass python=3.10 -y
+   conda activate eventpass
+   pip install -r requirements.txt
+   ```
+
+   Create a `.env` file in the `backend` directory with:
+
    ```env
    SUPABASE_URL=your_supabase_url
    SUPABASE_SERVICE_KEY=your_service_key
    ```
+   you will find these in the service role section in supabase
 
-
+   
 ## Authors
 
 - **Unmesh Raj**
